@@ -84,7 +84,17 @@ export default async function ChooseCentrePage({ searchParams }: { searchParams:
         {result.items.length === 0 ? (
           <div className="mt-6">
             <EmptyState title="No centres match">
-              {result.total === 0 && !raw.q ? "No centres are loaded yet – import the athlete workbook first." : "Try a different search."}
+              {result.total === 0 && !raw.q ? (
+                <>
+                  No centres are loaded yet. Go{" "}
+                  <Link href="/" className="underline">
+                    Home
+                  </Link>{" "}
+                  and open the Administrator portal to load demo data.
+                </>
+              ) : (
+                "Try a different search."
+              )}
             </EmptyState>
           </div>
         ) : (

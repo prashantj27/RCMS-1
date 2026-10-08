@@ -7,6 +7,8 @@ import { getSessionUser } from "@/server/auth/current-user";
 import { authMode } from "@/server/env";
 import { getDb } from "@/server/db/client";
 import { getOverview } from "@/server/services/analytics";
+import { getDemoStatus } from "@/server/services/demo";
+import { LoadDemoButton } from "./load-demo-button";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -21,22 +23,33 @@ export default async function DashboardPage() {
   const canDrill = user.caps.has("athletes:read");
 
   if (t.athletes === 0) {
+    const demo = await getDemoStatus(db, user);
     return (
       <>
         <PageHeader title="Dashboard" />
-        <Card>
-          <p className="text-sm text-slate-700">
-            No athletes are available{user.scope.academyIds !== null ? " for your assigned centres" : " yet"}.{" "}
-            {user.caps.has("imports:run") ? (
-              <>
-                Load the national master workbook from{" "}
-                <Link href="/imports" className="text-brand-700 underline">
-                  Data imports
-                </Link>
-                .
-              </>
-            ) : null}
-          </p>
+        <Card title="No athletes in the registry yet">
+          {demo.canLoad ? (
+            <>
+              <p className="text-sm text-slate-700">
+                This is a fresh prototype with an empty database. Load fictional, synthetic data (about 1,200 athletes in 30 centres) to
+                explore every portal. You can also load the real workbook from the command line (see the README) – but only load real
+                athlete data if the site is access-protected.
+              </p>
+              <LoadDemoButton />
+            </>
+          ) : user.scope.academyIds !== null ? (
+            <p className="text-sm text-slate-700">No athletes are enrolled in this centre.</p>
+          ) : authMode() === "prototype" && demo.athletes === 0 ? (
+            <p className="text-sm text-slate-700">
+              The registry is empty. Use{" "}
+              <Link href="/" className="text-brand-700 underline">
+                Home
+              </Link>{" "}
+              to open the <strong>Administrator</strong> portal, which can load demo data.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-700">The registry is empty. Load the athlete workbook (see the README).</p>
+          )}
         </Card>
       </>
     );

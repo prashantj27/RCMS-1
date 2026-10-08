@@ -12,6 +12,20 @@
 > (Project → Settings → Deployment Protection → _Vercel Authentication_) so only your team can open the site, or switch to login mode before importing real data.
 > Switching modes needs no data migration: set/remove `RCMS_AUTH_MODE=login` and redeploy.
 
+## Redeploying the prototype – checklist
+
+1. **Branch.** Vercel → Add New → Project → import `KheloIndiaAI/RCMS`. The repo's default branch is `claude/zen-galileo-fr34j8`, which holds the prototype.
+   If you deploy a different branch (for example an old `main`), you will get an old version – a page titled "RCMS" with an **Email / Password** form means an old commit.
+   To use `main`, merge the prototype branch into it first and set _Settings → Git → Production Branch_ accordingly.
+2. **Database.** Storage → Create Database → **Neon**, connect to the project (all environments). That is the only configuration prototype mode needs.
+3. **Deploy.** The build creates the tables automatically (also on a Preview deployment, as long as the database is still empty).
+4. **Check.** Open `https://<your-app>.vercel.app/api/health`. Expected: `"status":"ok"`, `"authMode":"prototype"`, `"migrations":true`.
+   `"version"` is the first 7 characters of the deployed commit – compare it with the latest commit on the branch.
+5. **Open the site.** The first page must show **four user-type buttons** (Administrator, HQ officer, Centre user, Analyst) and no password field.
+6. **Add data.** Click _Administrator_ → _Load synthetic demo data_ (one click, ~10 s). It only works on an empty database. Then try every portal using _Home · switch user type_.
+
+If step 4 shows `"migrations": false` or `"db":"down"`, the database variables are missing or the build log has a `[migrate]` error – send me that line.
+
 ## 1. One-time setup
 
 ### 1.1 Create the Neon database from Vercel (recommended)

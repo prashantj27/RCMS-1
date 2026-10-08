@@ -72,6 +72,18 @@ test.describe("Administrator portal", () => {
   });
 });
 
+test.describe("demo data loader", () => {
+  test("is refused once the registry has athletes (never mixes with real data) and for non-admin portals", async ({ page }) => {
+    await open(page, "admin");
+    const res = await page.request.post("/api/demo-data");
+    expect(res.status()).toBe(409);
+    await page.goto("/enter/hq");
+    expect((await page.request.post("/api/demo-data")).status()).toBe(403);
+    await page.goto("/dashboard");
+    await expect(page.getByRole("button", { name: "Load synthetic demo data" })).toHaveCount(0);
+  });
+});
+
 test.describe("HQ officer portal", () => {
   test("reads everything incl. personal details but cannot edit or import", async ({ page }) => {
     await open(page, "hq");

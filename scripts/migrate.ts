@@ -5,10 +5,24 @@
  *   tsx scripts/migrate.ts --vercel   build-time mode used by `vercel-build`:
  *       - skips quietly when DATABASE_URL is not configured
  *       - skips Preview deployments unless ALLOW_PREVIEW_MIGRATE=1, so a PR build
- *         can never alter a shared database by accident
+ *         can never alter a shared database by accident – EXCEPT when the database is
+ *         completely empty (a brand-new project), where there is nothing to protect
  */
+import { sql } from "drizzle-orm";
 import { createDb } from "../src/server/db/client";
 import { directDatabaseUrl } from "../src/server/db/url";
+
+/** True when the RCMS tables do not exist yet. */
+async function isFreshDatabase(url: string): Promise<boolean> {
+  const handle = await createDb({ url });
+  try {
+    const rows = (await handle.db.execute(sql`select to_regclass('public.users') is null as fresh`)) as unknown;
+    const list = (Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])) as { fresh: boolean }[];
+    return Boolean(list[0]?.fresh);
+  } finally {
+    await handle.close();
+  }
+}
 
 async function main() {
   const vercelMode = process.argv.includes("--vercel");
@@ -20,8 +34,11 @@ async function main() {
       return;
     }
     if (process.env.VERCEL_ENV === "preview" && process.env.ALLOW_PREVIEW_MIGRATE !== "1") {
-      console.warn("[migrate] Preview deployment – skipping migrations (set ALLOW_PREVIEW_MIGRATE=1 to enable)");
-      return;
+      if (!(await isFreshDatabase(url))) {
+        console.warn("[migrate] Preview deployment – skipping migrations (set ALLOW_PREVIEW_MIGRATE=1 to enable)");
+        return;
+      }
+      console.warn("[migrate] Preview deployment on an EMPTY database – applying migrations (nothing to protect)");
     }
   }
   if (!url) {

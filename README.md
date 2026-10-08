@@ -35,6 +35,8 @@ Every page has a **Home** button (and a banner) to go back and switch user type.
 > Use it only with synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN.
 > To switch real authentication back on set `RCMS_AUTH_MODE=login` (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 
+**Deployed on Vercel?** A fresh database is empty: open the _Administrator_ portal and press **Load synthetic demo data** (only offered while the registry is empty).
+
 Prefer a real Postgres? `docker compose up -d` then
 `DATABASE_URL=postgres://rcms:rcms@localhost:5432/rcms npm run db:migrate && npm run db:seed`.
 
