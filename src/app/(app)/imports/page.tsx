@@ -36,10 +36,8 @@ export default async function ImportsPage() {
               <li>Invalid values (impossible dates, size 0, plain-text phone numbers) are not stored and are listed under Data quality.</li>
               <li>Kit data edited in RCMS is kept when the workbook is re-imported.</li>
               <li>
-                The national master (~10 MB) exceeds the web upload limit. Load it from a terminal:
-                <code className="mt-1 block rounded bg-slate-100 px-2 py-1 text-xs">
-                  npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx
-                </code>
+                The national master (~10 MB) is read in your browser and uploaded in small batches, so it works on Vercel. Keep the tab open
+                until it finishes. A terminal import is also available: <code>npm run import:athletes -- ./file.xlsx</code>
               </li>
             </ul>
           </Card>

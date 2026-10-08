@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Badge, buttonPrimary, buttonSecondary, inputClass, Notice } from "@/components/ui";
+import { ImportClientError, runBrowserImport, type Progress } from "@/lib/import-client";
 
 interface Report {
   batchId: string;
@@ -32,7 +33,7 @@ interface Report {
   applied: { possibleDuplicates: number } | null;
 }
 
-const MAX = 4 * 1024 * 1024;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const nf = new Intl.NumberFormat("en-IN");
 
 export function ImportForm() {
@@ -41,12 +42,13 @@ export function ImportForm() {
   const [busy, setBusy] = useState<"dry_run" | "apply" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
 
   async function submit(mode: "dry_run" | "apply") {
     const file = input.current?.files?.[0];
     setError(null);
     if (!file) return setError("Choose a .xlsx or .csv file first");
-    if (file.size > MAX) return setError("This file is over 4 MB. Use the command-line importer for large workbooks (see below).");
+    if (file.size > MAX_FILE_BYTES) return setError("This file is over 50 MB – check that it is the athlete master workbook.");
     if (
       mode === "apply" &&
       !window.confirm(`Import ${file.name} into the live registry?\n\nExisting records are updated, nothing is deleted.`)
@@ -54,28 +56,23 @@ export function ImportForm() {
       return;
     setBusy(mode);
     setReport(null);
-    const body = new FormData();
-    body.set("file", file);
-    body.set("mode", mode);
+    setProgress(null);
     try {
-      const res = await fetch("/api/imports", { method: "POST", body });
-      const json = (await res.json().catch(() => null)) as (Report & { error?: { message?: string } }) | null;
-      if (!res.ok || !json) setError(json?.error?.message ?? `Import failed (HTTP ${res.status})`);
-      else {
-        setReport(json);
-        if (mode === "apply") router.refresh();
-      }
-    } catch {
-      setError("Network error – please try again");
+      const json = await runBrowserImport<Report>(file, mode, setProgress);
+      setReport(json);
+      if (mode === "apply") router.refresh();
+    } catch (e) {
+      setError(e instanceof ImportClientError || e instanceof Error ? e.message : "Import failed – please try again");
     }
     setBusy(null);
+    setProgress(null);
   }
 
   return (
     <div className="space-y-4">
       <div>
         <label htmlFor="import-file" className="mb-1 block text-xs font-medium text-slate-600">
-          Athlete master workbook (.xlsx or .csv, max 4 MB)
+          Athlete master workbook (.xlsx or .csv)
         </label>
         <input id="import-file" ref={input} type="file" accept=".xlsx,.csv" className={inputClass} />
       </div>
@@ -88,6 +85,15 @@ export function ImportForm() {
         </button>
       </div>
       <div aria-live="polite">
+        {busy && progress ? (
+          <Notice tone="info">
+            {progress.phase === "reading"
+              ? "Reading the workbook in your browser…"
+              : progress.phase === "uploading"
+                ? `Uploading ${nf.format(progress.sent)} of ${nf.format(progress.total)} rows…`
+                : "Checking and writing to the database – this takes up to a minute for the national master…"}
+          </Notice>
+        ) : null}
         {error ? <Notice tone="error">{error}</Notice> : null}
         {report ? (
           <div className="space-y-3">

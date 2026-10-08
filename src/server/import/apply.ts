@@ -6,8 +6,13 @@ import type { Db } from "../db/client";
 import { academies, athletes, centreTypes, dqIssues, enrollments, sports } from "../db/schema";
 import { rows } from "../db/util";
 
-const CHUNK = 1000;
-const ID_CHUNK = 5000;
+// Statement sizes stay under Postgres' 65,535-parameter limit (athletes: 19 columns × 2,500 rows = 47,500)
+// while keeping round-trips to a remote database (Neon) to a few dozen for the whole national file.
+const ATHLETE_CHUNK = 2500;
+const ENROLLMENT_CHUNK = 10_000;
+const ISSUE_CHUNK = 6000;
+const SMALL_CHUNK = 1000;
+const ID_CHUNK = 20_000;
 
 function* chunks<T>(list: readonly T[], size: number): Generator<T[]> {
   for (let i = 0; i < list.length; i += size) yield list.slice(i, i + size) as T[];
@@ -122,7 +127,7 @@ export interface ApplyResult {
 export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string): Promise<ApplyResult> {
   return db.transaction(async (tx) => {
     // — centre types —
-    for (const group of chunks(plan.centreTypes, CHUNK)) {
+    for (const group of chunks(plan.centreTypes, SMALL_CHUNK)) {
       await tx
         .insert(centreTypes)
         .values(group.map((c) => ({ id: c.id, code: c.code, label: c.label, operator: c.operator })))
@@ -140,7 +145,7 @@ export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string)
     const sportIdBySlug = new Map(sportRows.map((s) => [s.slug, s.id]));
 
     // — academies —
-    for (const group of chunks<AcademyDraft>(plan.academies, CHUNK)) {
+    for (const group of chunks<AcademyDraft>(plan.academies, SMALL_CHUNK)) {
       await tx
         .insert(academies)
         .values(
@@ -167,7 +172,7 @@ export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string)
     }
 
     // — athletes —
-    for (const group of chunks<AthleteDraft>(plan.athletes, CHUNK)) {
+    for (const group of chunks<AthleteDraft>(plan.athletes, ATHLETE_CHUNK)) {
       await tx
         .insert(athletes)
         .values(
@@ -214,7 +219,7 @@ export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string)
     }
 
     // — enrolments —
-    for (const group of chunks<EnrollmentDraft>(plan.enrollments, CHUNK * 2)) {
+    for (const group of chunks<EnrollmentDraft>(plan.enrollments, ENROLLMENT_CHUNK)) {
       await tx
         .insert(enrollments)
         .values(group.map((e) => ({ athleteId: e.athleteId, academyId: e.academyId, athleteType: e.athleteType, joinedOn: e.joinedOn })))
@@ -250,7 +255,7 @@ export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string)
         issueRows.push(i);
       }
     }
-    for (const group of chunks(issueRows, CHUNK * 2)) {
+    for (const group of chunks(issueRows, ISSUE_CHUNK)) {
       await tx.insert(dqIssues).values(
         group.map((i) => ({
           entityType: i.entityType,

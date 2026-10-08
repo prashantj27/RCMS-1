@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   serial,
   smallint,
   text,
@@ -160,6 +161,34 @@ export const importBatches = pgTable(
     check("import_batches_mode_chk", sql`${t.mode} in ('dry_run','apply')`),
     check("import_batches_status_chk", sql`${t.status} in ('running','completed','failed')`),
   ],
+);
+
+/**
+ * A workbook being uploaded in small batches (the browser parses the file and sends rows, because a single
+ * serverless request is limited to 4.5 MB). Removed after a successful import or after 24 hours.
+ */
+export const importStages = pgTable("import_stages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  fileName: text("file_name").notNull(),
+  fileSha256: text("file_sha256").notNull(),
+  /** Rows the browser says it will send (header excluded). */
+  rowCount: integer("row_count").notNull(),
+  header: jsonb("header").$type<string[]>().notNull(),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const importStageRows = pgTable(
+  "import_stage_rows",
+  {
+    stageId: uuid("stage_id")
+      .notNull()
+      .references(() => importStages.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    rows: jsonb("rows").$type<unknown[][]>().notNull(),
+    rowCount: integer("row_count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.stageId, t.seq] })],
 );
 
 export const auditLog = pgTable(
