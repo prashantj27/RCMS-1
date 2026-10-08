@@ -3,8 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, BarList, Card, Meter, PageHeader, Stat } from "@/components/ui";
 import { fmt, pct } from "@/lib/format";
-import { getSessionUser } from "@/server/auth/current-user";
-import { authMode } from "@/server/env";
+import { getPortalUser } from "@/server/auth/current-user";
 import { getDb } from "@/server/db/client";
 import { getOverview } from "@/server/services/analytics";
 import { getDemoStatus } from "@/server/services/demo";
@@ -14,8 +13,8 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const user = await getSessionUser();
-  if (!user) redirect(authMode() === "prototype" ? "/" : "/login");
+  const user = await getPortalUser();
+  if (!user) redirect("/");
   if (!user.caps.has("analytics:read")) redirect(user.caps.has("athletes:read") ? "/athletes" : "/forbidden");
   const db = await getDb();
   const o = await getOverview(db, user);
@@ -39,7 +38,7 @@ export default async function DashboardPage() {
             </>
           ) : user.scope.academyIds !== null ? (
             <p className="text-sm text-slate-700">No athletes are enrolled in this centre.</p>
-          ) : authMode() === "prototype" && demo.athletes === 0 ? (
+          ) : demo.athletes === 0 ? (
             <p className="text-sm text-slate-700">
               The registry is empty. Use{" "}
               <Link href="/" className="text-brand-700 underline">

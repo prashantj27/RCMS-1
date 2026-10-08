@@ -1,13 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "./db/client";
 import { rows } from "./db/util";
-import { authMode, isProd } from "./env";
 import { AppError } from "./errors";
-
-/** True when sessions can be signed: not needed in prototype mode; a real AUTH_SECRET in production login mode. */
-export function authSecretConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  return authMode(env) === "prototype" || !isProd() || (env.AUTH_SECRET ?? "").length >= 32;
-}
 
 /** SQLSTATE of a Postgres error, however the driver wraps it (postgres-js, PGlite, Drizzle's DrizzleQueryError). */
 export function pgErrorCode(e: unknown): string | undefined {
@@ -20,22 +14,24 @@ export function pgErrorCode(e: unknown): string | undefined {
 }
 
 export interface SetupChecks {
+  /** The database answers. */
   database: boolean;
+  /** The tables exist (migrations ran). */
   migrations: boolean;
-  authSecret: boolean;
-  accounts: boolean;
+  /** At least one athlete is loaded. */
+  data: boolean;
 }
 
 /** Booleans only – safe to expose publicly; they tell an operator what is still missing, nothing else. */
 export async function getSetupChecks(db: Db): Promise<SetupChecks> {
-  const checks: SetupChecks = { database: false, migrations: false, authSecret: authSecretConfigured(), accounts: false };
+  const checks: SetupChecks = { database: false, migrations: false, data: false };
   await rows(db, sql`select 1`);
   checks.database = true;
-  const [t] = await rows<{ ok: boolean }>(db, sql`select to_regclass('public.users') is not null as ok`);
+  const [t] = await rows<{ ok: boolean }>(db, sql`select to_regclass('public.athletes') is not null as ok`);
   checks.migrations = Boolean(t?.ok);
   if (checks.migrations) {
-    const [u] = await rows<{ n: number | string }>(db, sql`select count(*)::int as n from users where is_active`);
-    checks.accounts = Number(u?.n ?? 0) > 0;
+    const [u] = await rows<{ any: boolean }>(db, sql`select exists (select 1 from athletes) as any`);
+    checks.data = Boolean(u?.any);
   }
   return checks;
 }
@@ -48,14 +44,6 @@ export function notConfiguredError(e: unknown): AppError | null {
       503,
       "not_configured",
       "The database has not been set up yet (migrations have not run). Check the deployment's build log.",
-    );
-  }
-  if (e instanceof Error && /AUTH_SECRET must be set/.test(e.message)) {
-    console.error("[setup] AUTH_SECRET is missing or shorter than 32 characters");
-    return new AppError(
-      503,
-      "not_configured",
-      "The server is missing its AUTH_SECRET setting. Add it in the host's environment variables and redeploy.",
     );
   }
   return null;

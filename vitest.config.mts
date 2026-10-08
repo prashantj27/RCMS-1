@@ -11,7 +11,7 @@ export default defineConfig({
     globals: false,
     testTimeout: 60_000,
     hookTimeout: 120_000,
-    env: { NODE_ENV: "test", AUTH_SECRET: "test-secret-test-secret-test-secret-123456" },
+    env: { NODE_ENV: "test" },
     coverage: {
       provider: "v8",
       include: ["src/domain/**", "src/server/**"],

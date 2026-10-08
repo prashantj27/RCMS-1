@@ -9,7 +9,6 @@ import {
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   serial,
   smallint,
   text,
@@ -163,41 +162,6 @@ export const importBatches = pgTable(
   ],
 );
 
-export const users = pgTable(
-  "users",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    email: text("email").notNull(),
-    name: text("name").notNull(),
-    passwordHash: text("password_hash").notNull(),
-    role: text("role").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
-    failedLogins: integer("failed_logins").notNull().default(0),
-    lockedUntil: timestamp("locked_until", { withTimezone: true }),
-    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex("users_email_uq").on(sql`lower(${t.email})`),
-    check("users_role_chk", sql`${t.role} in ('ADMIN','HQ_OFFICER','CENTRE_USER','ANALYST')`),
-  ],
-);
-
-/** Academies a CENTRE_USER may see. */
-export const userAcademies = pgTable(
-  "user_academies",
-  {
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    academyId: integer("academy_id")
-      .notNull()
-      .references(() => academies.id, { onDelete: "cascade" }),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.academyId] })],
-);
-
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -216,4 +180,3 @@ export const auditLog = pgTable(
 
 export type AthleteRow = typeof athletes.$inferSelect;
 export type AcademyRow = typeof academies.$inferSelect;
-export type UserRow = typeof users.$inferSelect;

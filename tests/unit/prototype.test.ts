@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ROLES, ROLE_CAPABILITIES } from "@/domain/permissions";
-import { PORTALS, PROTOTYPE_USER_IDS, portalByRole, portalBySlug, prototypeCapabilities } from "@/domain/prototype";
+import {
+  PORTALS,
+  PROTOTYPE_USER_IDS,
+  portalByRole,
+  portalBySlug,
+  portalCan,
+  prototypeCapabilities,
+  showPersonalDetails,
+} from "@/domain/prototype";
 import { buildPrototypeUser } from "@/server/auth/prototype";
-import { authMode } from "@/server/env";
-
-describe("auth mode", () => {
-  it("defaults to prototype (no sign-in); only RCMS_AUTH_MODE=login turns authentication on", () => {
-    expect(authMode({})).toBe("prototype");
-    expect(authMode({ RCMS_AUTH_MODE: "" })).toBe("prototype");
-    expect(authMode({ RCMS_AUTH_MODE: "whatever" })).toBe("prototype");
-    expect(authMode({ RCMS_AUTH_MODE: "login" })).toBe("login");
-    expect(authMode({ RCMS_AUTH_MODE: " LOGIN " })).toBe("login");
-  });
-});
 
 describe("portal definitions", () => {
   it("offers exactly one portal per role, with unique slugs", () => {
@@ -23,17 +20,30 @@ describe("portal definitions", () => {
     expect(portalByRole("CENTRE_USER").slug).toBe("centre");
   });
 
-  it("a portal has the real role's capabilities, minus account management only", () => {
+  it("a portal has the real role's capabilities – except personal details, which are hidden unless explicitly enabled", () => {
     for (const role of ROLES) {
-      const expected = ROLE_CAPABILITIES[role].filter((c) => c !== "users:manage").sort();
-      expect([...prototypeCapabilities(role)].sort()).toEqual(expected);
-      expect(prototypeCapabilities(role).has("users:manage")).toBe(false);
+      const real = [...ROLE_CAPABILITIES[role]].sort();
+      expect([...prototypeCapabilities(role, { showPii: true })].sort()).toEqual(real);
+      expect([...prototypeCapabilities(role)].sort()).toEqual(real.filter((c) => c !== "athletes:read_pii"));
     }
   });
 
+  it("RCMS_PROTOTYPE_SHOW_PII must be exactly 1", () => {
+    expect(showPersonalDetails({})).toBe(false);
+    expect(showPersonalDetails({ RCMS_PROTOTYPE_SHOW_PII: "true" })).toBe(false);
+    expect(showPersonalDetails({ RCMS_PROTOTYPE_SHOW_PII: " 1 " })).toBe(true);
+  });
+
+  it("the home-page text tells the truth about personal details", () => {
+    const admin = portalByRole("ADMIN");
+    expect(portalCan(admin, false).join(" ")).toMatch(/hidden/);
+    expect(portalCan(admin, true).join(" ")).toMatch(/with personal details/);
+    expect(portalCan(portalByRole("ANALYST"), false).join(" ")).not.toMatch(/personal/);
+  });
+
   it("the home-page promises match the actual permissions", () => {
-    const caps = (r: (typeof ROLES)[number]) => prototypeCapabilities(r);
-    // Administrator: edits + imports + personal details
+    const caps = (r: (typeof ROLES)[number]) => prototypeCapabilities(r, { showPii: true });
+    // Administrator: edits + imports (+ personal details when enabled)
     expect(["athletes:write", "imports:run", "athletes:read_pii"].every((c) => caps("ADMIN").has(c as never))).toBe(true);
     // HQ: reads incl. personal details, never edits or imports
     expect(caps("HQ_OFFICER").has("athletes:read_pii")).toBe(true);

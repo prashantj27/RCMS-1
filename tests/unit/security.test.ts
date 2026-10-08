@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { capabilitiesFor, isScopedRole, ROLES, ROLE_CAPABILITIES } from "@/domain/permissions";
-import { passwordPolicyError } from "@/server/auth/password";
-import { sessionVersion, signSession, verifySession } from "@/server/auth/session";
 import { assertSameOrigin } from "@/server/http";
 import { ImportFileError, matrixFromFile } from "@/server/import/parse-file";
 import { escapeLike } from "@/server/services/filters";
@@ -28,40 +26,10 @@ describe("CSRF origin check", () => {
   });
 });
 
-describe("sessions", () => {
-  it("round-trips and rejects tampering", async () => {
-    const token = await signSession({ sub: "u1", sv: "abc" });
-    expect(await verifySession(token)).toEqual({ sub: "u1", sv: "abc" });
-    expect(await verifySession(`${token}x`)).toBeNull();
-    expect(await verifySession("garbage")).toBeNull();
-    const [h, p, s] = token.split(".");
-    const forged = `${h}.${Buffer.from(JSON.stringify({ sub: "admin", sv: "abc" })).toString("base64url")}.${s}`;
-    expect(await verifySession(forged)).toBeNull();
-    expect(p).toBeTruthy();
-  });
-  it("rejects alg=none tokens", async () => {
-    const none = `${Buffer.from('{"alg":"none"}').toString("base64url")}.${Buffer.from('{"sub":"u1","sv":"x"}').toString("base64url")}.`;
-    expect(await verifySession(none)).toBeNull();
-  });
-  it("session fingerprint differs per password hash", () => {
-    expect(sessionVersion("a")).not.toBe(sessionVersion("b"));
-  });
-});
-
-describe("password policy", () => {
-  it("enforces length and obvious weaknesses", () => {
-    expect(passwordPolicyError("short", "a@b.org")).toMatch(/12/);
-    expect(passwordPolicyError("aaaaaaaaaaaaaaaa", "a@b.org")).toMatch(/repetitive/);
-    expect(passwordPolicyError("contains-jsmith-inside", "jsmith@x.org")).toMatch(/email/);
-    expect(passwordPolicyError("Quartz-Meadow-7731!", "jsmith@x.org")).toBeNull();
-  });
-});
-
 describe("roles", () => {
-  it("only ADMIN may import or manage users; only centre users are scoped", () => {
+  it("only ADMIN may import; only centre users are scoped", () => {
     for (const r of ROLES) {
       const caps = capabilitiesFor(r);
-      expect(caps.has("users:manage")).toBe(r === "ADMIN");
       expect(caps.has("imports:run")).toBe(r === "ADMIN");
       expect(isScopedRole(r)).toBe(r === "CENTRE_USER");
     }

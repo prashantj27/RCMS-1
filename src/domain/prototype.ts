@@ -1,9 +1,11 @@
 import { capabilitiesFor, type Capability, type Role } from "./permissions";
 
 /**
- * Prototype mode: there is no sign-in. The home page offers one button per portal; choosing one makes the
- * session behave exactly like that role (same capabilities, same scope) – except user administration, which
- * has no meaning without accounts.
+ * There is no sign-in. The home page offers one button per portal; choosing one makes the session behave
+ * exactly like that role (same capabilities, same data scope).
+ *
+ * Because anyone with the link can open any portal, date of birth and parents' names are hidden in every
+ * portal unless RCMS_PROTOTYPE_SHOW_PII=1 is set deliberately.
  */
 export interface PortalDef {
   slug: "admin" | "hq" | "centre" | "analyst";
@@ -22,19 +24,19 @@ export const PORTALS: readonly PortalDef[] = [
     title: "Administrator",
     tagline: "Full control of the registry",
     can: [
-      "All athletes and centres, with personal details",
+      "All athletes and centres{details}",
       "Edit kit sizes and kit-issued status",
-      "Import / validate athlete workbooks",
+      "Import the athlete workbook (any size), or validate it first",
       "Dashboards, kit planning, data quality",
     ],
-    cannot: ["User accounts (not needed in the prototype)"],
+    cannot: ["Nothing – full access to the prototype"],
   },
   {
     slug: "hq",
     role: "HQ_OFFICER",
     title: "HQ officer",
     tagline: "National, read-only view",
-    can: ["All athletes and centres, with personal details", "Dashboards, kit planning, data quality", "See the import history"],
+    can: ["All athletes and centres{details}", "Dashboards, kit planning, data quality", "See the import history"],
     cannot: ["Edit anything", "Run imports"],
   },
   {
@@ -70,11 +72,21 @@ export const PROTOTYPE_USER_IDS: Record<Role, string> = {
   ANALYST: "00000000-0000-4000-8000-000000000004",
 };
 
-/** Capabilities of a prototype portal = the real role's, minus account management. */
-export function prototypeCapabilities(role: Role): ReadonlySet<Capability> {
+/** True only when the operator deliberately exposes date of birth and parents' names in the portals. */
+export const showPersonalDetails = (env: Record<string, string | undefined> = process.env): boolean =>
+  env.RCMS_PROTOTYPE_SHOW_PII?.trim() === "1";
+
+/** Capabilities of a portal = the role's, minus personal details unless explicitly enabled. */
+export function prototypeCapabilities(role: Role, opts: { showPii?: boolean } = {}): ReadonlySet<Capability> {
   const caps = new Set(capabilitiesFor(role));
-  caps.delete("users:manage");
+  if (!opts.showPii) caps.delete("athletes:read_pii");
   return caps;
+}
+
+/** The "can" list of a portal as shown on the home page, truthful about whether personal details are visible. */
+export function portalCan(portal: PortalDef, showPii: boolean): string[] {
+  const details = showPii ? ", with personal details" : " (date of birth and parents' names are hidden)";
+  return portal.can.map((c) => c.replace("{details}", details));
 }
 
 export const PORTAL_COOKIE = "rcms_portal";

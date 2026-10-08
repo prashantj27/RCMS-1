@@ -1,7 +1,7 @@
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-/** Prototype mode: no sign-in, one button per user type on the home page. */
+/** No sign-in anywhere: the home page is the user-type selection and each portal enforces its role. */
 
 async function open(page: Page, slug: "admin" | "hq" | "analyst") {
   await page.goto("/");
@@ -29,9 +29,10 @@ test.describe("home page", () => {
     await expect(page.locator("input[type=password]")).toHaveCount(0);
   });
 
-  test("/login is gone: it sends you back to the home page", async ({ page, request }) => {
-    await page.goto("/login");
-    await expect(page).toHaveURL(/\/$/);
+  test("there is no login module at all: no login page, no auth API, no users page", async ({ request }) => {
+    for (const path of ["/login", "/signin", "/admin/users", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/users"]) {
+      expect((await request.get(path)).status(), path).toBe(404);
+    }
     expect((await request.post("/api/auth/login", { data: { email: "admin", password: "x" } })).status()).toBe(404);
   });
 
@@ -66,9 +67,6 @@ test.describe("Administrator portal", () => {
     await page.setInputFiles("#import-file", path.join(__dirname, "..", "fixtures", "synthetic-athletes.xlsx"));
     await page.getByRole("button", { name: "Validate (dry run)" }).click();
     await expect(page.getByText(/Dry run complete – nothing was written/)).toBeVisible();
-
-    await page.goto("/admin/users");
-    await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
 
@@ -85,16 +83,28 @@ test.describe("demo data loader", () => {
 });
 
 test.describe("HQ officer portal", () => {
-  test("reads everything incl. personal details but cannot edit or import", async ({ page }) => {
+  test("reads everything (personal details hidden by default) but cannot edit or import", async ({ page }) => {
     await open(page, "hq");
     await expect(page.getByTestId("prototype-banner")).toContainText("HQ officer");
     await page.goto("/athletes");
     await page.locator("table tbody tr a").first().click();
-    await expect(page.getByText("Date of birth")).toBeVisible();
+    await expect(page.getByText("Personal details")).toBeVisible();
+    await expect(page.getByText("Date of birth")).toHaveCount(0);
+    await expect(page.getByText("Father", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save sizes" })).toHaveCount(0);
     await page.goto("/imports");
     await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
     await expect(page.locator("#import-file")).toHaveCount(0);
+  });
+
+  test("the API never returns date of birth or parents' names (hidden by default)", async ({ page }) => {
+    await open(page, "hq");
+    const list = await (await page.request.get("/api/athletes?pageSize=1")).json();
+    const one = await (await page.request.get(`/api/athletes/${list.items[0].id}`)).json();
+    expect(one.dob).toBeNull();
+    expect(one.fatherName).toBeNull();
+    expect(one.motherName).toBeNull();
+    expect(JSON.stringify(one)).not.toMatch(/mobile|cipher/i);
   });
 
   test("the API refuses edits for this portal", async ({ page }) => {
@@ -157,10 +167,8 @@ test.describe("Centre user portal", () => {
     await expect(page.getByRole("button", { name: "Save sizes" })).toBeVisible();
 
     // …but not run imports or manage users
-    for (const p of ["/imports", "/admin/users"]) {
-      await page.goto(p);
-      await expect(page).toHaveURL(/\/forbidden$/);
-    }
+    await page.goto("/imports");
+    await expect(page).toHaveURL(/\/forbidden$/);
   });
 
   test("a different centre gives a different, separate portal", async ({ page }) => {
@@ -215,9 +223,10 @@ test.describe("switching user types with the Home button", () => {
     await expect(page.locator('[data-portal="centre"]')).toBeVisible();
   });
 
-  test("health reports prototype mode as ready without secrets or accounts", async ({ request }) => {
+  test("health reports ready with data and needs no secrets or accounts", async ({ request }) => {
     const body = await (await request.get("/api/health")).json();
-    expect(body).toMatchObject({ status: "ok", db: "up", authMode: "prototype" });
+    expect(body).toMatchObject({ status: "ok", db: "up", checks: { database: true, migrations: true, data: true } });
+    expect(JSON.stringify(body)).not.toMatch(/auth|secret|password/i);
   });
 
   test("responses still carry the security headers", async ({ request }) => {

@@ -15,7 +15,7 @@ async function main() {
   }
   const handle = await createDb({ migrate: true });
   try {
-    const { report } = await seedDemo(handle.db, { athletes: 600 });
+    const report = await seedDemo(handle.db, { athletes: 600 });
     console.log(`[e2e] seeded ${report.stats.athletes} athletes`);
   } finally {
     await handle.close();

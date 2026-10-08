@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { buttonPrimary, buttonSecondary, EmptyState, Field, Pagination, Select, TextInput } from "@/components/ui";
 import { STATE_OPTIONS } from "@/domain/states";
 import { flattenParams, fmt, qs, type SearchParams } from "@/lib/format";
 import { prototypeBrowser } from "@/server/auth/prototype";
 import { getDb } from "@/server/db/client";
-import { authMode } from "@/server/env";
 import { academyListQuerySchema, listAcademies } from "@/server/services/academies";
 import { getLookups } from "@/server/services/lookups";
 
@@ -15,7 +13,6 @@ export const dynamic = "force-dynamic";
 
 /** Prototype mode: the centre portal shows one centre's data – pick which. */
 export default async function ChooseCentrePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  if (authMode() !== "prototype") notFound();
   const raw = flattenParams(await searchParams);
   const parsed = academyListQuerySchema.safeParse({ pageSize: "12", status: "active", ...raw });
   const query = parsed.success ? parsed.data : academyListQuerySchema.parse({ pageSize: "12" });

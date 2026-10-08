@@ -1,6 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { importBatches, users } from "../db/schema";
+import { PROTOTYPE_USER_IDS, portalByRole } from "@/domain/prototype";
+import { importBatches } from "../db/schema";
 
 export interface ImportBatchView {
   id: string;
@@ -15,6 +16,12 @@ export interface ImportBatchView {
   summary: Record<string, unknown> | null;
 }
 
+/** Which portal started a batch (CLI / system runs have no portal). */
+function labelFor(id: string | null): string | null {
+  const role = (Object.keys(PROTOTYPE_USER_IDS) as (keyof typeof PROTOTYPE_USER_IDS)[]).find((r) => PROTOTYPE_USER_IDS[r] === id);
+  return role ? `${portalByRole(role).title} portal` : null;
+}
+
 export async function listImportBatches(db: Db, limit = 25): Promise<ImportBatchView[]> {
   const r = await db
     .select({
@@ -25,12 +32,11 @@ export async function listImportBatches(db: Db, limit = 25): Promise<ImportBatch
       fileSha256: importBatches.fileSha256,
       startedAt: importBatches.startedAt,
       finishedAt: importBatches.finishedAt,
-      by: users.email,
+      createdBy: importBatches.createdBy,
       error: importBatches.error,
       summary: importBatches.summary,
     })
     .from(importBatches)
-    .leftJoin(users, eq(users.id, importBatches.createdBy))
     .orderBy(desc(importBatches.startedAt))
     .limit(limit);
   return r.map((x) => ({
@@ -41,7 +47,7 @@ export async function listImportBatches(db: Db, limit = 25): Promise<ImportBatch
     fileSha256: x.fileSha256,
     startedAt: x.startedAt.toISOString(),
     finishedAt: x.finishedAt?.toISOString() ?? null,
-    createdBy: x.by,
+    createdBy: labelFor(x.createdBy),
     error: x.error,
     summary: x.summary,
   }));

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { parseGarmentSize, parseShoeSize } from "@/domain/normalize";
 import { DQ_RULES, type DqRuleCode } from "@/domain/dq-rules";
 import { stateName } from "@/domain/states";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import { audit } from "../auth/audit";
 import type { Db } from "../db/client";
 import { athletes, dqIssues } from "../db/schema";
@@ -88,7 +88,7 @@ async function enrollmentsFor(db: Db, athleteIds: number[]): Promise<Map<number,
   return map;
 }
 
-export async function listAthletes(db: Db, user: SessionUser, q: AthleteListQuery): Promise<Page<AthleteListItem>> {
+export async function listAthletes(db: Db, user: PortalUser, q: AthleteListQuery): Promise<Page<AthleteListItem>> {
   const where = athleteWhere(q, user.scope);
   const total = num((await one<{ n: number }>(db, sql`select count(*)::int as n from athletes a where ${where}`))?.n);
   const pageCount = Math.max(1, Math.ceil(total / q.pageSize));
@@ -168,7 +168,7 @@ export interface AthleteDetail {
 }
 
 /** An athlete is visible to a scoped caller only when enrolled in one of their academies. */
-async function assertInScope(db: Db, user: SessionUser, athleteId: number): Promise<void> {
+async function assertInScope(db: Db, user: PortalUser, athleteId: number): Promise<void> {
   if (user.scope.academyIds === null) return;
   if (!user.scope.academyIds.length) throw notFound("Athlete");
   const hit = await one(
@@ -178,7 +178,7 @@ async function assertInScope(db: Db, user: SessionUser, athleteId: number): Prom
   if (!hit) throw notFound("Athlete");
 }
 
-export async function getAthlete(db: Db, user: SessionUser, id: number): Promise<AthleteDetail> {
+export async function getAthlete(db: Db, user: PortalUser, id: number): Promise<AthleteDetail> {
   await assertInScope(db, user, id);
   const a = await one<{
     id: number;
@@ -262,7 +262,7 @@ export const kitPatchSchema = z
   .strict();
 export type KitPatch = z.infer<typeof kitPatchSchema>;
 
-export async function updateAthleteKit(db: Db, user: SessionUser, id: number, patch: KitPatch, ip: string | null): Promise<AthleteDetail> {
+export async function updateAthleteKit(db: Db, user: PortalUser, id: number, patch: KitPatch, ip: string | null): Promise<AthleteDetail> {
   if (!user.caps.has("athletes:write")) throw forbidden();
   await assertInScope(db, user, id);
   const [current] = await db.select().from(athletes).where(eq(athletes.id, id));

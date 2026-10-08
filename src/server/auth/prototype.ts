@@ -1,26 +1,33 @@
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { ROLES, type Role } from "@/domain/permissions";
-import { CENTRE_COOKIE, PORTAL_COOKIE, PROTOTYPE_USER_IDS, portalByRole, prototypeCapabilities } from "@/domain/prototype";
+import {
+  CENTRE_COOKIE,
+  PORTAL_COOKIE,
+  PROTOTYPE_USER_IDS,
+  portalByRole,
+  prototypeCapabilities,
+  showPersonalDetails,
+} from "@/domain/prototype";
 import { getDb, type Db } from "../db/client";
 import { academies } from "../db/schema";
-import type { SessionUser } from "./authenticate";
+import type { PortalUser } from "./user";
 
 /** The user object for a portal. `academyId` is only meaningful (and required) for the centre portal. */
-export function buildPrototypeUser(role: Role, centre?: { id: number; name: string }): SessionUser {
+export function buildPrototypeUser(role: Role, centre?: { id: number; name: string }): PortalUser {
   const portal = portalByRole(role);
   return {
     id: PROTOTYPE_USER_IDS[role],
-    email: `prototype:${portal.slug}`,
+    email: `portal:${portal.slug}`,
     name: role === "CENTRE_USER" && centre ? centre.name : `${portal.title} portal`,
     role,
-    caps: prototypeCapabilities(role),
+    caps: prototypeCapabilities(role, { showPii: showPersonalDetails() }),
     scope: { academyIds: role === "CENTRE_USER" ? (centre ? [centre.id] : []) : null },
   };
 }
 
 /** Unrestricted read-only persona used by the portal chooser to list centres. */
-export const prototypeBrowser = (): SessionUser => buildPrototypeUser("ADMIN");
+export const prototypeBrowser = (): PortalUser => buildPrototypeUser("ADMIN");
 
 export async function findCentre(db: Db, id: number): Promise<{ id: number; name: string } | null> {
   if (!Number.isInteger(id) || id <= 0) return null;
@@ -29,7 +36,7 @@ export async function findCentre(db: Db, id: number): Promise<{ id: number; name
 }
 
 /** Reads the portal choice from the cookies set by /enter/*; null when nothing (valid) was chosen yet. */
-export async function getPrototypeUser(): Promise<SessionUser | null> {
+export async function getPrototypeUser(): Promise<PortalUser | null> {
   const jar = await cookies();
   const role = jar.get(PORTAL_COOKIE)?.value as Role | undefined;
   if (!role || !ROLES.includes(role)) return null;

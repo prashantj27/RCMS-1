@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { stateName } from "@/domain/states";
 import { DQ_RULES, type DqRuleCode } from "@/domain/dq-rules";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { num, one, rows } from "../db/util";
 import { notFound } from "../errors";
@@ -33,7 +33,7 @@ export interface AcademyListItem {
   residential: number;
 }
 
-export async function listAcademies(db: Db, user: SessionUser, q: AcademyListQuery): Promise<Page<AcademyListItem>> {
+export async function listAcademies(db: Db, user: PortalUser, q: AcademyListQuery): Promise<Page<AcademyListItem>> {
   const conds = [academyScope(user.scope)];
   if (q.q) {
     const like = `%${q.q.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
@@ -104,7 +104,7 @@ export interface AcademyDetail extends AcademyListItem {
   issues: { rule: DqRuleCode; severity: string; title: string; count: number }[];
 }
 
-export async function getAcademy(db: Db, user: SessionUser, id: number): Promise<AcademyDetail> {
+export async function getAcademy(db: Db, user: PortalUser, id: number): Promise<AcademyDetail> {
   const base = await one<{
     id: number;
     name: string;

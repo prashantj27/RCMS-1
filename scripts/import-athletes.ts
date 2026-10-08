@@ -7,16 +7,13 @@
  * Options
  *   --dry-run        parse + validate + diff against the database, write nothing
  *   --as-of YYYY-MM-DD   reference date for "future"/age rules (default: today)
- *   --by <email>     attribute the batch to an existing user
  *
  * Uses DATABASE_URL_UNPOOLED / DATABASE_URL (or the local PGlite dev database when neither is set).
  * The workbook contains personal data of minors: keep it out of git and shared drives.
  */
 import fs from "node:fs";
 import path from "node:path";
-import { eq, sql } from "drizzle-orm";
 import { createDb } from "../src/server/db/client";
-import { users } from "../src/server/db/schema";
 import { matrixFromFile, sha256, ImportFileError } from "../src/server/import/parse-file";
 import { runAthleteImport } from "../src/server/import/run-import";
 import { DQ_RULES, type DqRuleCode } from "../src/domain/dq-rules";
@@ -30,10 +27,9 @@ let closeHandle: () => Promise<void> = async () => undefined;
 
 async function main() {
   const asOfArg = arg("--as-of");
-  const byArg = arg("--by");
-  const file = process.argv.slice(2).find((a) => !a.startsWith("--") && a !== asOfArg && a !== byArg);
+  const file = process.argv.slice(2).find((a) => !a.startsWith("--") && a !== asOfArg);
   if (!file) {
-    console.error("Usage: npm run import:athletes -- <file.xlsx|file.csv> [--dry-run] [--as-of YYYY-MM-DD] [--by email]");
+    console.error("Usage: npm run import:athletes -- <file.xlsx|file.csv> [--dry-run] [--as-of YYYY-MM-DD]");
     process.exit(2);
   }
   const dryRun = process.argv.includes("--dry-run");
@@ -47,19 +43,7 @@ async function main() {
   const handle = await createDb({ direct: true });
   closeHandle = () => handle.close();
   const db = handle.db;
-  let createdBy: string | null = null;
-  const by = byArg;
-  if (by) {
-    const [u] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(sql`lower(${users.email})`, by.toLowerCase()));
-    if (!u) {
-      console.error(`No user with email ${by}`);
-      process.exit(2);
-    }
-    createdBy = u.id;
-  }
+  const createdBy: string | null = null; // started from the command line, not from a portal
 
   const t0 = Date.now();
   console.log(`Reading ${path.basename(file)} (${(buf.length / 1e6).toFixed(1)} MB) …`);

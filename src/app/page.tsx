@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { PORTALS } from "@/domain/prototype";
-import { getSessionUser } from "@/server/auth/current-user";
-import { authMode } from "@/server/env";
+import { PORTALS, portalCan, showPersonalDetails } from "@/domain/prototype";
 
 export const metadata: Metadata = { title: "Choose a portal" };
 export const dynamic = "force-dynamic";
 
 /**
- * Prototype mode: the initial page – one button per user type, no sign-in.
- * Login mode: this URL just forwards to the dashboard or the login page.
+ * The initial page: one button per user type. There is no sign-in anywhere in the app.
  */
-export default async function HomePage() {
-  if (authMode() === "login") redirect((await getSessionUser()) ? "/dashboard" : "/login");
+export default function HomePage() {
+  const showPii = showPersonalDetails();
 
   return (
     <main className="min-h-screen bg-brand-900 px-4 py-10 text-white">
@@ -43,7 +39,7 @@ export default async function HomePage() {
                 <span className="mt-1 text-sm text-slate-500">{p.tagline}</span>
                 <span className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700">Can</span>
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                  {p.can.map((c) => (
+                  {portalCan(p, showPii).map((c) => (
                     <li key={c}>{c}</li>
                   ))}
                 </ul>

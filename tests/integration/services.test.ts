@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { syntheticAthleteMatrix } from "@/dev/synthetic-athletes";
-import { authenticate, loadUser, type SessionUser } from "@/server/auth/authenticate";
+import { prototypeCapabilities } from "@/domain/prototype";
+import { buildPrototypeUser } from "@/server/auth/prototype";
+import type { PortalUser } from "@/server/auth/user";
 import type { DbHandle } from "@/server/db/client";
-import { academies, athletes, dqIssues, users } from "@/server/db/schema";
+import { academies, athletes, dqIssues } from "@/server/db/schema";
 import { rows } from "@/server/db/util";
 import { runAthleteImport } from "@/server/import/run-import";
 import { getAcademy, listAcademies, academyListQuerySchema } from "@/server/services/academies";
@@ -12,29 +14,18 @@ import { getAthlete, listAthletes, updateAthleteKit } from "@/server/services/at
 import { getDqSummary, listDqIssues, dqListQuerySchema } from "@/server/services/dq";
 import { athleteListQuerySchema } from "@/server/services/filters";
 import { getKitDemand, kitDemandCsv, kitQuerySchema } from "@/server/services/kit";
-import { createUser, updateUser } from "@/server/services/users";
 import { testDb } from "../helpers/db";
 
-const PASSWORD = "Correct-Horse-Battery-9";
 let h: DbHandle;
-let admin: SessionUser;
-let hq: SessionUser;
-let centre: SessionUser;
-let analyst: SessionUser;
+let admin: PortalUser;
+let hq: PortalUser;
+let centre: PortalUser;
+let analyst: PortalUser;
 let centreAcademyIds: number[];
 
 const listQ = (o: Record<string, unknown> = {}) => athleteListQuerySchema.parse({ pageSize: "100", ...o });
-
-async function mk(
-  email: string,
-  role: "ADMIN" | "HQ_OFFICER" | "CENTRE_USER" | "ANALYST",
-  academyIds: number[] = [],
-): Promise<SessionUser> {
-  const v = await createUser(h.db, null, { email, name: email, role, password: PASSWORD, academyIds }, null);
-  const u = await loadUser(h.db, v.id);
-  const { passwordHash: _p, ...safe } = u!;
-  return safe;
-}
+/** The same portal with date of birth / parents' names enabled (RCMS_PROTOTYPE_SHOW_PII=1). */
+const withPii = (u: PortalUser): PortalUser => ({ ...u, caps: prototypeCapabilities(u.role, { showPii: true }) });
 
 beforeAll(async () => {
   h = await testDb();
@@ -48,73 +39,14 @@ beforeAll(async () => {
   });
   const acs = await h.db.select({ id: academies.id }).from(academies).orderBy(academies.id).limit(2);
   centreAcademyIds = acs.map((a) => a.id);
-  admin = await mk("boss@example.org", "ADMIN");
-  hq = await mk("hq@example.org", "HQ_OFFICER");
-  centre = await mk("centre@example.org", "CENTRE_USER", centreAcademyIds);
-  analyst = await mk("analyst@example.org", "ANALYST");
+  admin = buildPrototypeUser("ADMIN");
+  hq = buildPrototypeUser("HQ_OFFICER");
+  // The shipped centre portal has ONE centre; two are used here to exercise multi-centre scoping.
+  centre = { ...buildPrototypeUser("CENTRE_USER"), scope: { academyIds: centreAcademyIds } };
+  analyst = buildPrototypeUser("ANALYST");
 });
 afterAll(async () => {
   await h.close();
-});
-
-describe("authentication", () => {
-  it("accepts valid credentials, rejects wrong password and unknown users with the same error", async () => {
-    const ok = await authenticate(h.db, "BOSS@example.org", PASSWORD, "1.2.3.4"); // case-insensitive email
-    expect(ok.token.split(".")).toHaveLength(3);
-    await expect(authenticate(h.db, "boss@example.org", "nope-nope-nope", null)).rejects.toMatchObject({
-      status: 401,
-      code: "invalid_credentials",
-    });
-    await expect(authenticate(h.db, "ghost@example.org", "nope-nope-nope", null)).rejects.toMatchObject({
-      status: 401,
-      code: "invalid_credentials",
-    });
-  });
-
-  it("locks the account after 5 failures and unlocks when the lock expires", async () => {
-    await mk("victim@example.org", "ANALYST");
-    for (let i = 0; i < 5; i++)
-      await expect(authenticate(h.db, "victim@example.org", "wrong-wrong-wrong", null)).rejects.toMatchObject({ status: 401 });
-    await expect(authenticate(h.db, "victim@example.org", PASSWORD, null)).rejects.toMatchObject({ status: 429, code: "locked" });
-    await h.db
-      .update(users)
-      .set({ lockedUntil: new Date(Date.now() - 1000) })
-      .where(eq(users.email, "victim@example.org"));
-    await expect(authenticate(h.db, "victim@example.org", PASSWORD, null)).resolves.toBeTruthy();
-  });
-
-  it("rejects deactivated users", async () => {
-    const u = await mk("gone@example.org", "ANALYST");
-    await updateUser(h.db, admin, u.id, { isActive: false }, null);
-    await expect(authenticate(h.db, "gone@example.org", PASSWORD, null)).rejects.toMatchObject({ status: 401 });
-  });
-});
-
-describe("user administration rules", () => {
-  it("requires at least one academy for centre users and blocks self-demotion", async () => {
-    await expect(
-      createUser(h.db, admin, { email: "c2@example.org", name: "c2", role: "CENTRE_USER", password: PASSWORD, academyIds: [] }, null),
-    ).rejects.toThrow(/at least one academy/);
-    await expect(updateUser(h.db, admin, admin.id, { role: "ANALYST" }, null)).rejects.toThrow(/cannot deactivate or demote/);
-    await expect(
-      createUser(h.db, admin, { email: "weak@example.org", name: "w", role: "ANALYST", password: "short", academyIds: [] }, null),
-    ).rejects.toThrow(/at least 12/);
-    await expect(
-      createUser(h.db, admin, { email: "dup@example.org", name: "d", role: "ANALYST", password: PASSWORD, academyIds: [] }, null),
-    ).resolves.toBeTruthy();
-    await expect(
-      createUser(h.db, admin, { email: "DUP@example.org", name: "d", role: "ANALYST", password: PASSWORD, academyIds: [] }, null),
-    ).rejects.toThrow(/already exists/);
-  });
-
-  it("changing a password changes the session fingerprint", async () => {
-    const { sessionVersion } = await import("@/server/auth/session");
-    const before = (await h.db.select().from(users).where(eq(users.email, "dup@example.org")))[0]!;
-    const u = await loadUser(h.db, before.id);
-    await updateUser(h.db, admin, before.id, { password: "Another-Long-Passphrase-1" }, null);
-    const after = (await h.db.select().from(users).where(eq(users.id, before.id)))[0]!;
-    expect(sessionVersion(after.passwordHash)).not.toBe(sessionVersion(u!.passwordHash));
-  });
 });
 
 describe("athlete listing", () => {
@@ -189,7 +121,7 @@ describe("centre-user scoping", () => {
   });
 
   it("a centre user with no assigned academies sees nothing", async () => {
-    const empty: SessionUser = { ...centre, scope: { academyIds: [] } };
+    const empty: PortalUser = { ...centre, scope: { academyIds: [] } };
     expect((await listAthletes(h.db, empty, listQ())).total).toBe(0);
     expect((await getOverview(h.db, empty)).totals.athletes).toBe(0);
     expect((await getDqSummary(h.db, empty)).bySeverity).toEqual({ error: 0, warning: 0, info: 0 });
@@ -210,20 +142,26 @@ describe("centre-user scoping", () => {
 });
 
 describe("PII gating", () => {
-  it("withholds DOB and parents from roles without athletes:read_pii", async () => {
+  it("hides date of birth and parents' names by default in every portal (nobody is signed in)", async () => {
     const id = (await listAthletes(h.db, admin, listQ({ pageSize: "1", sort: "recent" }))).items[0]!.id;
-    const full = await getAthlete(h.db, hq, id);
-    expect(full.dob).not.toBeNull();
-    const noPii: SessionUser = { ...hq, caps: new Set([...hq.caps].filter((c) => c !== "athletes:read_pii")) };
-    const masked = await getAthlete(h.db, noPii, id);
-    expect(masked.dob).toBeNull();
-    expect(masked.fatherName).toBeNull();
-    expect(masked.motherName).toBeNull();
-    expect(JSON.stringify(full)).not.toMatch(/mobile|cipher/i);
+    for (const u of [admin, hq]) {
+      const d = await getAthlete(h.db, u, id);
+      expect(d.dob).toBeNull();
+      expect(d.fatherName).toBeNull();
+      expect(d.motherName).toBeNull();
+    }
   });
 
-  it("analysts cannot read athlete records by capability", () => {
+  it("shows them only when RCMS_PROTOTYPE_SHOW_PII is deliberately enabled", async () => {
+    const id = (await listAthletes(h.db, admin, listQ({ pageSize: "1", sort: "recent" }))).items[0]!.id;
+    const shown = await getAthlete(h.db, withPii(hq), id);
+    expect(shown.dob).not.toBeNull();
+    expect(JSON.stringify(shown)).not.toMatch(/mobile|cipher/i); // phone numbers are never exposed
+  });
+
+  it("analysts cannot read athlete records by capability; HQ cannot edit", () => {
     expect(analyst.caps.has("athletes:read")).toBe(false);
+    expect(withPii(analyst).caps.has("athletes:read_pii")).toBe(false);
     expect(analyst.caps.has("analytics:read")).toBe(true);
     expect(hq.caps.has("athletes:write")).toBe(false);
   });

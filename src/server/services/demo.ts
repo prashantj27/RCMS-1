@@ -1,11 +1,10 @@
 import { sql } from "drizzle-orm";
 import { syntheticAthleteMatrix } from "@/dev/synthetic-athletes";
 import { audit } from "../auth/audit";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { one, num } from "../db/util";
-import { authMode } from "../env";
-import { conflict, forbidden, notFound } from "../errors";
+import { conflict, forbidden } from "../errors";
 import { runAthleteImport, type ImportReport } from "../import/run-import";
 
 export interface DemoStatus {
@@ -13,19 +12,18 @@ export interface DemoStatus {
   canLoad: boolean;
 }
 
-/** Demo data can only be loaded into a completely empty registry, and only in prototype mode. */
-export async function getDemoStatus(db: Db, user: SessionUser): Promise<DemoStatus> {
+/** Demo data can only be loaded into a completely empty registry, by the Administrator portal. */
+export async function getDemoStatus(db: Db, user: PortalUser): Promise<DemoStatus> {
   const r = await one<{ n: number }>(db, sql`select count(*)::int as n from athletes`);
   const athletes = num(r?.n);
-  return { athletes, canLoad: authMode() === "prototype" && athletes === 0 && user.caps.has("imports:run") };
+  return { athletes, canLoad: athletes === 0 && user.caps.has("imports:run") };
 }
 
 /**
  * Loads ~1,200 SYNTHETIC athletes (fictional names, 30 fictional centres) so a fresh prototype has something to show.
  * Refuses when any athlete exists: synthetic ids would otherwise mix with real records.
  */
-export async function loadDemoData(db: Db, user: SessionUser, ip: string | null): Promise<ImportReport> {
-  if (authMode() !== "prototype") throw notFound("Demo data");
+export async function loadDemoData(db: Db, user: PortalUser, ip: string | null): Promise<ImportReport> {
   if (!user.caps.has("imports:run")) throw forbidden("Only the Administrator portal can load demo data");
   const status = await getDemoStatus(db, user);
   if (status.athletes > 0) throw conflict("The registry already contains athletes – demo data is only for an empty database");

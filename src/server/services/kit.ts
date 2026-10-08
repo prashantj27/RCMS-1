@@ -2,7 +2,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { compareSizes } from "@/domain/normalize";
 import { stateName } from "@/domain/states";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { num, rows } from "../db/util";
 import { athleteFiltersSchema, athleteWhere, joinedWhere, pagingSchema, type AthleteFilters } from "./filters";
@@ -75,7 +75,7 @@ const toGroupRow = (r: AggRow, label: string): KitGroupRow => ({
 });
 
 /** Kit & shoe demand for the selected athletes, overall and grouped. */
-export async function getKitDemand(db: Db, user: SessionUser, q: KitQuery): Promise<KitDemand> {
+export async function getKitDemand(db: Db, user: PortalUser, q: KitQuery): Promise<KitDemand> {
   const filters: AthleteFilters = q;
   const aw = athleteWhere(filters, user.scope);
   const jw = joinedWhere(filters, user.scope);

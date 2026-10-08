@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { rows } from "../db/util";
 import { idList } from "./filters";
@@ -10,7 +10,7 @@ export interface Lookups {
 }
 
 /** Small reference lists used by filter forms. */
-export async function getLookups(db: Db, user: SessionUser): Promise<Lookups> {
+export async function getLookups(db: Db, user: PortalUser): Promise<Lookups> {
   const scoped = user.scope.academyIds !== null;
   const ids = user.scope.academyIds ?? [];
   const sports = await rows<{ id: number; name: string }>(

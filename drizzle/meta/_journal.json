@@ -8,6 +8,13 @@
       "when": 1791445640592,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791466716952,
+      "tag": "0001_drop_login_tables",
+      "breakpoints": true
     }
   ]
 }

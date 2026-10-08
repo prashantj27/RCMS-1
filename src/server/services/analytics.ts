@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { stateName } from "@/domain/states";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { num, one, rows } from "../db/util";
 import { athleteWhere, joinedWhere, type AthleteFilters } from "./filters";
@@ -43,7 +43,7 @@ const EMPTY_FILTERS: AthleteFilters = {
   issueRule: undefined,
 };
 
-export async function getOverview(db: Db, user: SessionUser, filters: AthleteFilters = EMPTY_FILTERS): Promise<Overview> {
+export async function getOverview(db: Db, user: PortalUser, filters: AthleteFilters = EMPTY_FILTERS): Promise<Overview> {
   const aw = athleteWhere(filters, user.scope);
   const jw = joinedWhere(filters, user.scope);
 

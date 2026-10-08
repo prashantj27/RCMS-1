@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { DQ_RULE_CODES, DQ_RULES, type DqRuleCode } from "@/domain/dq-rules";
-import type { SessionUser } from "../auth/authenticate";
+import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
 import { num, rows } from "../db/util";
 import { dqScope, pagingSchema } from "./filters";
@@ -24,7 +24,7 @@ export interface DqSummaryRow {
   count: number;
 }
 
-export async function getDqSummary(db: Db, user: SessionUser): Promise<{ rows: DqSummaryRow[]; bySeverity: Record<string, number> }> {
+export async function getDqSummary(db: Db, user: PortalUser): Promise<{ rows: DqSummaryRow[]; bySeverity: Record<string, number> }> {
   const res = await rows<{ rule_code: string; n: number }>(
     db,
     sql`select d.rule_code, count(*)::int as n from dq_issues d where ${dqScope(user.scope)} group by 1`,
@@ -62,7 +62,7 @@ export interface DqIssueItem {
   canOpen: boolean;
 }
 
-export async function listDqIssues(db: Db, user: SessionUser, q: DqListQuery): Promise<Page<DqIssueItem>> {
+export async function listDqIssues(db: Db, user: PortalUser, q: DqListQuery): Promise<Page<DqIssueItem>> {
   const conds = [dqScope(user.scope)];
   if (q.rule) conds.push(sql`d.rule_code = ${q.rule}`);
   if (q.severity) conds.push(sql`d.severity = ${q.severity}`);

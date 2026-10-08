@@ -1,17 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import type { Capability } from "@/domain/permissions";
-import type { SessionUser } from "./auth/authenticate";
+import type { PortalUser } from "./auth/user";
 import { requireApiUser } from "./auth/current-user";
 import { getDb, type Db } from "./db/client";
 import { AppError, badRequest, forbidden } from "./errors";
+import { notConfiguredError } from "./setup";
 
 type RouteParams = Record<string, string>;
 
 export interface RouteCtx {
   req: NextRequest;
   db: Db;
-  user: SessionUser;
+  user: PortalUser;
   params: RouteParams;
   ip: string | null;
 }
@@ -50,7 +51,8 @@ export function assertSameOrigin(req: NextRequest): void {
   if (site && site !== "same-origin" && site !== "none") throw forbidden("Cross-origin request blocked");
 }
 
-export function toErrorResponse(e: unknown): NextResponse {
+export function toErrorResponse(raw: unknown): NextResponse {
+  const e = notConfiguredError(raw) ?? raw;
   if (e instanceof AppError) {
     return NextResponse.json({ error: { code: e.code, message: e.message, details: e.details } }, { status: e.status });
   }
@@ -86,7 +88,7 @@ export function route(opts: { cap?: Capability }, fn: (ctx: RouteCtx) => Promise
   };
 }
 
-/** Unauthenticated route (login, health). Still CSRF-protected for mutations. */
+/** Route that needs no portal (e.g. health). Still CSRF-protected for mutations. */
 export function publicRoute(fn: (ctx: PublicRouteCtx) => Promise<unknown>) {
   return async (req: NextRequest, ctx: { params: Promise<RouteParams> }): Promise<Response> => {
     try {

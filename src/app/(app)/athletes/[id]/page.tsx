@@ -69,7 +69,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
               </>
             ) : (
               <Row label="Personal details">
-                <span className="text-slate-500">hidden for your role</span>
+                <span className="text-slate-500">hidden (this prototype has no sign-in)</span>
               </Row>
             )}
           </dl>
