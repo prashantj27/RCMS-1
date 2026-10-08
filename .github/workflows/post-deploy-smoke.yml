@@ -1,0 +1,52 @@
+name: Post-deploy smoke test
+
+# Vercel's GitHub integration reports every deployment as a `deployment_status`.
+# When one succeeds we verify the live URL actually serves the app and its database.
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  smoke:
+    name: Smoke test ${{ github.event.deployment_status.environment }}
+    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: ${{ github.event.deployment_status.environment_url }}
+      # Optional: Vercel "Protection Bypass for Automation" secret, needed when Preview URLs are password/SSO protected.
+      BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Health endpoint reports the database is up
+        run: |
+          hdr=()
+          [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o health.json -w '%{http_code}' "${hdr[@]}" "$URL/api/health" || true)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then break; fi
+            if [ "$code" = "401" ] && [ -z "$BYPASS" ]; then
+              echo "::notice::Deployment is behind Vercel Authentication and no VERCEL_AUTOMATION_BYPASS_SECRET is set – skipping smoke test."
+              exit 0
+            fi
+            sleep 10
+          done
+          cat health.json; echo
+          [ "$code" = "200" ] && grep -q '"db":"up"' health.json
+      - name: Login page is served with hardening headers
+        run: |
+          hdr=()
+          [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")
+          curl -sSI "${hdr[@]}" "$URL/login" | tee headers.txt
+          grep -qi '^x-frame-options: deny' headers.txt
+          grep -qi '^content-security-policy:' headers.txt
+      - name: API refuses anonymous access
+        run: |
+          hdr=()
+          [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${hdr[@]}" "$URL/api/athletes")
+          echo "HTTP $code"
+          [ "$code" = "401" ]

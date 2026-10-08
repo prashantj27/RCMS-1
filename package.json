@@ -1,0 +1,59 @@
+{
+  "name": "rcms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Regional Centre Monitoring System \u2013 athlete registry, data quality and kit planning for Khelo India / SAI centres",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "vercel-build": "tsx scripts/migrate.ts --vercel && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
+    "import:athletes": "tsx scripts/import-athletes.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "csv-parse": "^7.0.3",
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "next": "^16.4.0",
+    "postgres": "^3.4.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "read-excel-file": "^9.3.12",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.0",
+    "postcss": "^8.5.29",
+    "prettier": "^3.9.9",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

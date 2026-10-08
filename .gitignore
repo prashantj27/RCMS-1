@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnp*
+# next / build
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+# test output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+# env & secrets
+.env
+.env.*
+!.env.example
+.vercel/
+# local DB (PGlite dev database)
+.data/
+# NEVER commit real athlete data (contains minors' PII)
+*.xlsx
+*.xls
+*.csv
+!tests/fixtures/*.csv
+!tests/fixtures/synthetic-athletes.xlsx
+data/
+imports/
+# misc
+.DS_Store
+*.log
+npm-debug.log*
