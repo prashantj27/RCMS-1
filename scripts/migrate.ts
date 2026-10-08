@@ -16,7 +16,7 @@ import { directDatabaseUrl } from "../src/server/db/url";
 async function isFreshDatabase(url: string): Promise<boolean> {
   const handle = await createDb({ url });
   try {
-    const rows = (await handle.db.execute(sql`select to_regclass('public.users') is null as fresh`)) as unknown;
+    const rows = (await handle.db.execute(sql`select to_regclass('public.athletes') is null as fresh`)) as unknown;
     const list = (Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])) as { fresh: boolean }[];
     return Boolean(list[0]?.fresh);
   } finally {

@@ -70,6 +70,19 @@ test.describe("Administrator portal", () => {
   });
 });
 
+test.describe("security headers", () => {
+  test("one CSP per page; only /imports may start the blob: worker the in-browser workbook reader needs", async ({ request }) => {
+    await request.get("/enter/admin"); // /imports redirects home without a chosen portal
+    const csp = async (url: string) => (await request.get(url)).headers()["content-security-policy"] ?? "";
+    expect(await csp("/imports")).toContain("worker-src 'self' blob:");
+    for (const url of ["/", "/imports/anything", "/api/health", "/choose-centre"]) {
+      const value = await csp(url);
+      expect(value, url).toContain("default-src 'self'");
+      expect(value, url).not.toContain("worker-src");
+    }
+  });
+});
+
 test.describe("demo data loader", () => {
   test("is refused once the registry has athletes (never mixes with real data) and for non-admin portals", async ({ page }) => {
     await open(page, "admin");

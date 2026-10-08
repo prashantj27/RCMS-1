@@ -1,38 +1,20 @@
-# Deployment (Vercel + Postgres) and CI/CD
+# Deployment (Vercel + Neon) and CI/CD
 
-## 0. Choose the access mode
+RCMS has **no login module**. The first page is a user-type selection (Administrator, HQ officer, Centre user, Analyst) and each
+button opens that portal with that role's permissions. The only required configuration is the database.
 
-| Mode                               | When                                                                                       | Variables needed                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| **Prototype** (default)            | demos / stakeholder walk-throughs. No sign-in; the home page has one button per user type. | only the database (`DATABASE_URL`, injected by Neon)   |
-| **Login** (`RCMS_AUTH_MODE=login`) | real use. Username/email + password, sessions, lockout, audit of sign-ins.                 | + `AUTH_SECRET`, `RCMS_*_PASSWORD` (section 1.2 / 1.3) |
+> ⚠️ **Anyone with the link can open every portal, including Administrator (edit + import).** This is a prototype.
+> The workbook holds personal data of **minors**, so before loading the real data turn on **Vercel Deployment Protection**
+> (Project → Settings → Deployment Protection → _Vercel Authentication_, for Production and Preview) or keep the site on a VPN.
+> Date of birth and parents' names are **hidden in every portal by default**; set `RCMS_PROTOTYPE_SHOW_PII=1` only on a protected deployment.
+> Phone numbers (ciphertext in the source) are never returned by any API.
 
-> ⚠️ **In prototype mode anyone with the link can open every portal and edit data.** Do not load the real athlete workbook (minors' personal data)
-> into a prototype that is reachable from the internet. Either keep the data synthetic (`npm run db:seed`), or enable **Vercel Deployment Protection**
-> (Project → Settings → Deployment Protection → _Vercel Authentication_) so only your team can open the site, or switch to login mode before importing real data.
-> Switching modes needs no data migration: set/remove `RCMS_AUTH_MODE=login` and redeploy.
+## 1. Setup checklist (Vercel + Neon)
 
-## Redeploying the prototype – checklist
-
-1. **Branch.** Vercel → Add New → Project → import `KheloIndiaAI/RCMS`. The repo's default branch is `claude/zen-galileo-fr34j8`, which holds the prototype.
-   If you deploy a different branch (for example an old `main`), you will get an old version – a page titled "RCMS" with an **Email / Password** form means an old commit.
-   To use `main`, merge the prototype branch into it first and set _Settings → Git → Production Branch_ accordingly.
-2. **Database.** Storage → Create Database → **Neon**, connect to the project (all environments). That is the only configuration prototype mode needs.
-3. **Deploy.** The build creates the tables automatically (also on a Preview deployment, as long as the database is still empty).
-4. **Check.** Open `https://<your-app>.vercel.app/api/health`. Expected: `"status":"ok"`, `"authMode":"prototype"`, `"migrations":true`.
-   `"version"` is the first 7 characters of the deployed commit – compare it with the latest commit on the branch.
-5. **Open the site.** The first page must show **four user-type buttons** (Administrator, HQ officer, Centre user, Analyst) and no password field.
-6. **Add data.** Click _Administrator_ → _Load synthetic demo data_ (one click, ~10 s). It only works on an empty database. Then try every portal using _Home · switch user type_.
-
-If step 4 shows `"migrations": false` or `"db":"down"`, the database variables are missing or the build log has a `[migrate]` error – send me that line.
-
-## 1. One-time setup
-
-### 1.1 Create the Neon database from Vercel (recommended)
-
-1. Vercel → your project → **Storage** → **Create Database** → **Neon** (Marketplace) → pick the region closest to your users
-   (India/Singapore, i.e. the AWS Asia-Pacific region Neon offers) → connect it to this project for **Production, Preview and Development**.
-2. Neon injects the connection variables automatically – you do not copy anything by hand:
+1. **Branch.** All work happens on **`dev`**. In GitHub → Settings → Branches set the default branch to `dev`, and in Vercel →
+   Settings → Git set **Production Branch = `dev`**. (Otherwise Vercel keeps deploying an older branch – a page titled "RCMS" with an
+   Email/Password form is an old commit.)
+2. **Database.** Vercel → Storage → **Neon** → connect to the project for Production, Preview and Development. Neon injects:
 
    | Injected variable                                 | Used for                                                    |
    | ------------------------------------------------- | ----------------------------------------------------------- |
@@ -40,57 +22,37 @@ If step 4 shows `"migrations": false` or `"db":"down"`, the database variables a
    | `DATABASE_URL_UNPOOLED` (direct)                  | migrations in `vercel-build` and the CLI importer           |
    | `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `PG*` | aliases – RCMS reads them as fallbacks, nothing else needed |
 
-3. **Preview databases (recommended):** in the integration settings enable **Create a database branch for each preview deployment**.
-   Each PR then gets an isolated copy-on-write branch of production data's _schema and data_; because that copy can contain real athlete
-   records, keep Vercel **Deployment Protection** on for Previews. Then add `ALLOW_PREVIEW_MIGRATE=1` (Preview scope only) so new migrations
-   are applied to each preview branch. Without branching, leave it unset: previews will not touch the database schema.
+   RCMS is Neon-ready: `prepare:false` (PgBouncer transaction mode), `sslmode=require`, 15 s connect timeout (scale-to-zero cold start),
+   DDL/imports on the direct connection. Any Postgres 14+ works – just set `DATABASE_URL`.
 
-RCMS is Neon-ready: `prepare:false` (PgBouncer transaction mode), `sslmode=require` honoured, connect timeout 15 s (covers Neon's
-scale-to-zero cold start of a few hundred ms), DDL/imports on the direct connection. Any other Postgres 14+ works too – just set `DATABASE_URL`.
+3. **Deploy.** Framework preset Next.js; `vercel.json` sets `npm ci` and `npm run vercel-build`, which runs the migrations and then `next build`.
+   Production builds always apply pending migrations. Preview builds apply them only when the database is still empty (no `athletes` table)
+   or when `ALLOW_PREVIEW_MIGRATE=1` is set, so a PR can never change a shared database by accident.
+4. **Check.** Open `https://<app>.vercel.app/api/health` → `"status":"ok"`, `"migrations":true`. `"data":false` just means no data yet.
+   `"version"` is the first 7 characters of the deployed commit. The first page must show **four user-type buttons** and no password field.
+5. **Load the workbook into Neon (from the browser, no CLI needed).** Home → **Administrator** → **Data imports** → choose
+   `RC_monitoring_Athlete_Details_V1.xlsx` → **Validate (dry run)** to preview → **Import**. Keep the tab open (≈ 1 minute for 65 k rows).
+   The browser reads the workbook, uploads it in 1,000-row batches (Vercel limits a request body to 4.5 MB), and the server stages the rows
+   in Postgres, then runs the import in one transaction. Re-importing the same file changes nothing (idempotent); a failed or abandoned upload
+   leaves the registry untouched and is cleaned up automatically after 24 h.
+   Expected totals for V1: **64,849 athletes · 2,431 centres · 75 sports** on the Dashboard.
+6. **No data yet and just want to look around?** Administrator → _Load synthetic demo data_ (only offered while the registry is empty).
 
-### 1.2 Connect the repo to Vercel
-
-1. Vercel → **Add New → Project → Import Git Repository** → `KheloIndiaAI/RCMS`.
-2. Framework preset: **Next.js** (auto-detected). Leave build/install commands – `vercel.json` sets `npm ci` and `npm run vercel-build`.
-3. **Environment Variables:** `DATABASE_URL*` already come from the Neon integration (step 1.1). **Prototype mode needs nothing else.** For **login mode** also add `RCMS_AUTH_MODE=login` and:
-
-   | Variable                  | Value                                                                                         |
-   | ------------------------- | --------------------------------------------------------------------------------------------- |
-   | `AUTH_SECRET`             | `openssl rand -base64 48` (different for Production and Preview)                              |
-   | `RCMS_ADMIN_PASSWORD`     | password for login **`admin`**                                                                |
-   | `RCMS_HQ_PASSWORD`        | password for login **`hq`**                                                                   |
-   | `RCMS_CENTRE_PASSWORD`    | password for login **`centre`**                                                               |
-   | `RCMS_CENTRE_ACADEMY_IDS` | comma-separated centre ids the `centre` login may see, e.g. `3010,888` (see the Centres page) |
-   | `RCMS_ANALYST_PASSWORD`   | password for login **`analyst`**                                                              |
-
-   Rules: login ids are the plain usernames `admin`, `hq`, `centre`, `analyst` (case-insensitive; override with `RCMS_<ROLE>_USERNAME`).
-   Passwords must be ≥ 12 characters and must not contain the username (so `admin@12345` is rejected). An account whose password
-   variable is unset is simply not created. Mark the password variables **Sensitive** in Vercel.
-
-4. Deploy. `vercel-build` runs migrations **before** `next build` (Production only by default – see section 3).
-
-### 1.3 Accounts and first data load
-
-**Accounts (login mode).** On every Production build, `vercel-build` runs `scripts/provision-users.ts` after the migrations: it creates the accounts above
-and, if you later change a password variable and redeploy, updates that account's password (old sessions end). It never deletes users,
-never re-enables an account an admin deactivated, and never changes an existing account's role. Problems (for example a password that
-breaks the policy) are printed as warnings in the build log and do **not** fail the deploy – check the log line `[provision] …`.
-
-**Data.** The 10 MB workbook exceeds Vercel's 4.5 MB request limit, so load it once from your machine:
+### Alternative: import from a terminal
 
 ```bash
-# Pull the Neon variables Vercel already holds (Production):
 vercel env pull .env.production.local --environment=production   # then: set -a; . ./.env.production.local; set +a
-# (or export DATABASE_URL_UNPOOLED='postgres://…/neondb?sslmode=require' by hand – the CLI prefers the direct URL)
 npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx --dry-run
 npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx
 ```
 
-**Order matters for the `centre` account.** A brand-new database has no centres until the workbook is loaded, so on the very first deploy
-the `centre` account is reported as `skipped`. After the import: look up the centre ids (sign in as `admin` → Academies & centres),
-set `RCMS_CENTRE_ACADEMY_IDS`, and redeploy (or run `npm run db:provision-users` locally with the same variables). From then on it is kept in sync.
+Both paths run the same code and produce identical data (verified on a 65 k-row workbook: row counts and hashes of athletes, enrolments and
+data-quality findings are equal). **Never run `db:seed` against a database that holds real data.**
 
-Then sign in as `admin` at your Vercel URL and verify `GET /api/health` → `{"status":"ok","db":"up"}`.
+### Preview databases (recommended)
+
+In the Neon integration enable _Create a database branch for each preview deployment_ and set `ALLOW_PREVIEW_MIGRATE=1` for the Preview
+scope only. A preview branch contains a copy of production data, so keep Deployment Protection on for Previews.
 
 ## 2. CI/CD flow
 
@@ -102,15 +64,15 @@ feature branch ──push──► GitHub Actions CI ─┐            ┌─►
                          ├ same suite on Postgres 16     │
                          ├ e2e: prod build + Postgres    │
                          └ npm audit (prod deps)         │
-PR ──review + "CI passed" required──► merge to main ──► Vercel Production deploy ──► post-deploy smoke test
+PR ──review + "CI passed" required──► merge to dev ──► Vercel Production deploy ──► post-deploy smoke test
 ```
 
 - **CI** (`.github/workflows/ci.yml`) – one required check, **`CI passed`**, aggregates all jobs.
-- **CD** – Vercel's Git integration deploys; GitHub is the gate. Nothing deploys to Production except `main`.
-- **Post-deploy smoke** (`post-deploy-smoke.yml`) fires on Vercel's `deployment_status`; checks `/api/health` (DB reachable), security headers, and that anonymous API access is 401. If Previews sit behind Vercel Authentication, add the repo secret `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel → Settings → Deployment Protection → Protection Bypass for Automation), otherwise the job skips with a notice.
+- **CD** – Vercel's Git integration deploys; GitHub is the gate. Nothing deploys to Production except `dev` (the Production Branch).
+- **Post-deploy smoke** (`post-deploy-smoke.yml`) fires on Vercel's `deployment_status`; checks `/api/health` (DB reachable), security headers, and that an API call without a chosen portal is 401. If Previews sit behind Vercel Authentication, add the repo secret `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel → Settings → Deployment Protection → Protection Bypass for Automation), otherwise the job skips with a notice.
 - **Dependabot** opens weekly grouped npm PRs and monthly Action updates; **CodeQL** runs weekly (public repos / GHAS).
 
-### Recommended GitHub settings (Settings → Branches → rule for `main`)
+### Recommended GitHub settings (Settings → Branches → rule for `dev`)
 
 - Require a pull request, ≥ 1 approval; **Require status checks: `CI passed`**; require branches up to date.
 - Block force-pushes and deletions. Optionally add a `CODEOWNERS` file once a maintainers team exists.
@@ -132,23 +94,24 @@ PR ──review + "CI passed" required──► merge to main ──► Vercel P
 
 ## 5. Operations
 
-| Concern          | How                                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Uptime           | Point any monitor at `/api/health` (200 = app + DB up, 503 = DB down)                                                                                                                      |
-| Logs             | Vercel → Logs (structured `console.error` for unhandled API errors; no PII is logged)                                                                                                      |
-| Audit            | `audit_log` table, `GET /api/audit` (admin)                                                                                                                                                |
-| Backups          | Neon PITR (set retention ≥ 7 days) – **this database holds minors' data; confirm retention policy**                                                                                        |
-| Secrets rotation | Change `AUTH_SECRET` → everyone is signed out. Change a user's password → only their sessions end                                                                                          |
-| Scaling          | Serverless functions scale out; each instance keeps ≤ `DB_POOL_MAX` (default 5) connections to Neon's pooler, which multiplexes up to thousands of clients – no tuning needed at this size |
-| Cost             | Neon scales compute to zero when idle (first request after idle is a bit slower); raise the autosuspend delay or minimum compute if that matters                                           |
+| Concern | How                                                                                                                                                                                        |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Uptime  | Point any monitor at `/api/health` (200 = app + DB up, 503 = DB down)                                                                                                                      |
+| Logs    | Vercel → Logs (structured `console.error` for unhandled API errors; no PII is logged)                                                                                                      |
+| Audit   | `audit_log` table, `GET /api/audit` (admin)                                                                                                                                                |
+| Backups | Neon PITR (set retention ≥ 7 days) – **this database holds minors' data; confirm retention policy**                                                                                        |
+| Secrets | There are none besides the database URL (rotate it in Neon; Vercel redeploys)                                                                                                              |
+| Scaling | Serverless functions scale out; each instance keeps ≤ `DB_POOL_MAX` (default 5) connections to Neon's pooler, which multiplexes up to thousands of clients – no tuning needed at this size |
+| Cost    | Neon scales compute to zero when idle (first request after idle is a bit slower); raise the autosuspend delay or minimum compute if that matters                                           |
 
 ## 6. Go-live checklist
 
-- [ ] `AUTH_SECRET` set (≥ 32 random chars) in Production; different from Preview
+- [ ] GitHub default branch and Vercel Production Branch are `dev`; Dependabot targets `dev` (already configured)
 - [ ] Neon integration connected to Production + Preview (`DATABASE_URL` pooled and `DATABASE_URL_UNPOOLED` present); region India/Singapore
-- [ ] `RCMS_*_PASSWORD` variables set (marked Sensitive); build log shows `[provision] … created/unchanged` for admin, hq, centre, analyst; demo data **not** present (never run `db:seed` on production)
-- [ ] National workbook imported; dashboard totals match the source (64,849 / 2,431 / 75 for V1)
-- [ ] Branch protection on `main` with `CI passed`
-- [ ] Vercel Deployment Protection enabled for Previews (they can show real data if pointed at it)
-- [ ] Neon backup retention confirmed; data-protection owner informed that the system holds minors' PII
+- [ ] **Vercel Deployment Protection enabled (Production and Previews) before the real workbook is imported**
+- [ ] `RCMS_PROTOTYPE_SHOW_PII` unset (DOB / parents hidden) unless the deployment is protected and the need is documented
+- [ ] Workbook imported from the Administrator portal; Dashboard totals match the source (64,849 / 2,431 / 75 for V1); Data imports history shows the run
+- [ ] Demo data **not** present in a real-data database (the loader refuses a non-empty registry)
+- [ ] Branch protection on `dev` with `CI passed`
+- [ ] Neon backup retention confirmed (≥ 7 days); data-protection owner informed that the system holds minors' PII
 - [ ] Custom domain + HTTPS (HSTS is already sent)

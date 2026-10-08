@@ -8,15 +8,15 @@ Built from the national athlete master workbook (`RC_monitoring_Athlete_Details_
 
 ## What it does
 
-| Area                    | Capability                                                                                                                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Athlete registry**    | Search by name / KIT id / id; filter by sport, centre type, state, gender, residential status, data issues. Athlete detail with enrolments, kit sizes and findings.                            |
-| **Centres**             | 2,431 academies/centres across 9 types (Academy, NCOE, SATC, NSTC, ABSC, SKIC, KICE …) with athlete counts, sport mix, size coverage.                                                          |
-| **Kit & shoe planning** | Quantity required per size (shoe, t-shirt, blazer, pant) for any selection, who is still missing a size, kit-issued tracking, grouped by centre / sport / centre type / state, **CSV export**. |
-| **Data quality**        | 21 automatic rules (impossible dates, KIT-id vs gender/birth-year, placeholder values, duplicates, …) with drill-down. Invalid values are **never stored**.                                    |
-| **Import pipeline**     | Idempotent, transactional, dry-run first. CLI for the national master; web upload (≤ 4 MB) for centre files. Preserves manual edits, never blanks known values, never deletes.                 |
-| **Access control**      | Four roles; centre users see only their assigned centres. Personal details (DOB, parents) gated by capability. Audit log for logins, edits, imports, user changes.                             |
-| **Dashboards**          | National / centre overview: centre types, sports, states, gender, residency, age profile, profile completeness.                                                                                |
+| Area                    | Capability                                                                                                                                                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Athlete registry**    | Search by name / KIT id / id; filter by sport, centre type, state, gender, residential status, data issues. Athlete detail with enrolments, kit sizes and findings.                                                                                        |
+| **Centres**             | 2,431 academies/centres across 9 types (Academy, NCOE, SATC, NSTC, ABSC, SKIC, KICE …) with athlete counts, sport mix, size coverage.                                                                                                                      |
+| **Kit & shoe planning** | Quantity required per size (shoe, t-shirt, blazer, pant) for any selection, who is still missing a size, kit-issued tracking, grouped by centre / sport / centre type / state, **CSV export**.                                                             |
+| **Data quality**        | 21 automatic rules (impossible dates, KIT-id vs gender/birth-year, placeholder values, duplicates, …) with drill-down. Invalid values are **never stored**.                                                                                                |
+| **Import pipeline**     | Idempotent, transactional, dry-run first. Upload the national workbook from the Administrator portal (read in the browser, sent in small batches, so it works on Vercel) or use the CLI. Preserves manual edits, never blanks known values, never deletes. |
+| **Access control**      | No login: choose a user type on the first page. Four portals with fixed permissions; the centre portal sees one centre. DOB and parents' names are hidden by default. Audit log for kit edits and imports.                                                 |
+| **Dashboards**          | National / centre overview: centre types, sports, states, gender, residency, age profile, profile completeness.                                                                                                                                            |
 
 ## Quick start (no database to install)
 
@@ -27,13 +27,13 @@ npm run db:seed         # synthetic demo data in ./.data/pglite (embedded Postgr
 npm run dev             # http://localhost:3000
 ```
 
-**There is no sign-in (prototype mode).** The first page offers one button per user type – **Administrator, HQ officer, Centre user, Analyst** –
+**There is no sign-in.** The first page offers one button per user type – **Administrator, HQ officer, Centre user, Analyst** –
 and each opens that role's portal with exactly that role's permissions. The Centre user button first asks which centre you want to be.
 Every page has a **Home** button (and a banner) to go back and switch user type.
 
-> ⚠️ **Prototype mode means anyone who can open the URL can use every portal, including editing.**
-> Use it only with synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN.
-> To switch real authentication back on set `RCMS_AUTH_MODE=login` (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
+> ⚠️ **There is no login module: anyone who can open the URL can use every portal, including editing and importing.**
+> Use synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN before loading real data.
+> Date of birth and parents' names are hidden by default (`RCMS_PROTOTYPE_SHOW_PII=1` shows them).
 
 **Deployed on Vercel?** A fresh database is empty: open the _Administrator_ portal and press **Load synthetic demo data** (only offered while the registry is empty).
 
@@ -61,12 +61,12 @@ npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx             #
 | `npm run build && npm run test:e2e`  | Playwright against the production build                      |
 | `npm run db:generate`                | Generate a migration after editing `src/server/db/schema.ts` |
 | `npm run db:migrate`                 | Apply migrations to `DATABASE_URL`                           |
-| `npm run db:bootstrap-admin`         | Create the first admin (`ADMIN_EMAIL`, `ADMIN_PASSWORD`)     |
+| `npm run import:athletes -- file`    | Import the workbook from a terminal (`--dry-run` to preview) |
 
 ## Deploying
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), deploy. Prototype mode needs no other variables.
-Every push to a branch gets a Preview; every merge to `main` goes to Production, gated by CI.
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel (Production Branch **`dev`**), add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), deploy, then import the workbook from the Administrator portal. No other variables are needed.
+Every push to a branch gets a Preview; every merge to `dev` goes to Production, gated by CI.
 
 ## Documentation
 

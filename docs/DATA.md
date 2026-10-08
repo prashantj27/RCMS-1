@@ -19,7 +19,7 @@ Source: `RC_monitoring_Athlete_Details_V1.xlsx`, sheet **AthleteMaster**, 22 col
 
 ## Tables
 
-`centre_types` · `sports` · `academies` · `athletes` · `enrollments` · `dq_issues` · `import_batches` · `users` · `user_academies` · `audit_log`
+`centre_types` · `sports` · `academies` · `athletes` · `enrollments` · `dq_issues` · `import_batches` · `audit_log` · `import_stages` · `import_stage_rows` (temporary upload staging)
 (see `src/server/db/schema.ts`; ids of source entities are preserved).
 
 Centre types (from `role_detail_id`): 6 Academy · 29 NCOE (SAI) · 40 SATC (SAI) · 41 ABSC (SAI) · 42 SKIC (SAI) · 43 NSTC (SAI) · 69 ABSC (SLKIC) · 80 KICE (SLKIC) · 82 SKIC (SLKIC).

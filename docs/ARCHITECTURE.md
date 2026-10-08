@@ -6,7 +6,7 @@
 Browser ──► Next.js (Vercel, region bom1)
               ├─ Server Components  → services → Drizzle → Postgres
               ├─ Route Handlers /api/*  (same services; JSON)
-              └─ Client islands: login, kit editor, import form, user admin
+              └─ Client islands: kit editor, workbook import (reads the file in the browser, uploads in batches)
 ```
 
 One deployable. No separate API service, queue or cache: at 65 k athletes every dashboard query runs in 100–300 ms
@@ -48,17 +48,15 @@ drizzle/      SQL migrations (generated, committed)
 
 ## Security model
 
-> **Prototype mode (default)** has no authentication: the home page selects a _persona_ (cookie `rcms_portal`, plus `rcms_centre` for the centre portal) and every capability / scope check below is applied to that persona. Identity is not verified, so the mode is for demos with synthetic data or platform-protected deployments only. Everything in the _login mode_ bullets below applies when `RCMS_AUTH_MODE=login`.
+> **There is no authentication.** The home page selects a _persona_ (cookie `rcms_portal`, plus `rcms_centre` for the centre portal) and every capability / scope check below is applied to that persona. Identity is not verified, so protect the deployment at platform level (Vercel Deployment Protection / VPN) before loading real data.
 
-- **AuthN:** email + password (bcrypt cost 12, 12-char minimum). Session = HS256 JWT in an `httpOnly`, `SameSite=Lax`, `Secure` cookie, 8 h. The token carries a fingerprint of the password hash, so a password change signs the user out everywhere. The user row is re-read on every request: deactivation is immediate.
-- **Brute force:** 5 failures → 15-minute lock (stored in DB, so it works across serverless instances). Unknown users cost the same bcrypt time as real ones; errors are generic.
-- **AuthZ:** capabilities per role (`domain/permissions.ts`). **Scope**: `CENTRE_USER` is restricted to assigned academies in _every_ query; out-of-scope records return **404**, not 403.
-- **PII:** DOB and parents require `athletes:read_pii`. Phone numbers are stored only as the opaque ciphertext from the source file and are **never returned by any API**; plaintext numbers in a file are rejected, not stored.
-- **CSRF:** all mutations require same-origin (`Origin` / `Sec-Fetch-Site`), on top of `SameSite=Lax`.
+- **AuthZ:** capabilities per role (`domain/permissions.ts`, `domain/prototype.ts`). **Scope**: the centre portal is restricted to its one centre in _every_ query; out-of-scope records return **404**, not 403. Portals never hold `users:manage`.
+- **PII:** DOB and parents require `athletes:read_pii`, which no portal has unless `RCMS_PROTOTYPE_SHOW_PII=1`. Phone numbers are stored only as the opaque ciphertext from the source file and are **never returned by any API**; plaintext numbers in a file are rejected, not stored.
+- **CSRF:** all mutations require same-origin (`Origin` / `Sec-Fetch-Site`).
 - **Injection:** all SQL is parameterised; LIKE wildcards in search are escaped; CSV export neutralises spreadsheet formulas.
 - **Headers:** CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, strict referrer and permissions policies; API responses `no-store`. `robots: noindex`.
-- **Uploads:** size-capped (4 MB), content-sniffed (ZIP magic for xlsx), row-capped; parsing never executes content.
-- **Audit:** login/logout/failed/blocked, kit edits (before → after), imports, user changes.
+- **Uploads:** the browser parses the workbook and sends JSON batches (≤ 5,000 rows, zod-validated cell types and lengths); rows are staged in `import_stages` / `import_stage_rows` and only applied if the count is complete and contiguous. The CLI importer still content-sniffs files (ZIP magic) and caps rows. Only `/imports` has a CSP `worker-src blob:` (the unzip library needs it for big files).
+- **Audit:** kit edits (before → after) and imports.
 
 ## Performance (65 k athletes, real data, Postgres 16)
 

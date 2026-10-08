@@ -9,11 +9,11 @@ there is no `middleware.ts`, and `next lint` is gone (use `npm run lint`).
 - Schema change → edit `src/server/db/schema.ts` → `npm run db:generate` → commit the SQL (CI fails on drift). Keep migrations additive.
 - Zero-setup DB: unset `DATABASE_URL` → embedded PGlite in `.data/`. Real Postgres: `TEST_DATABASE_URL=… npx vitest run` (**wipes** that DB).
 
-## Auth modes
+## Access (no login module)
 
-- Default **prototype mode** (no sign-in): `/` is the portal chooser, `/enter/<admin|hq|centre|analyst>` sets a persona cookie, `/choose-centre` picks the centre for the centre portal. Personas are built in `src/server/auth/prototype.ts` from the real role capabilities (minus `users:manage`).
-- `RCMS_AUTH_MODE=login` restores full authentication (sessions, lockout, provisioning). Both modes are covered by e2e: `npx playwright test` (prototype) and `E2E_AUTH_MODE=login npx playwright test`.
+- There is **no authentication**: `/` is the portal chooser, `/enter/<admin|hq|centre|analyst>` sets a persona cookie, `/choose-centre` picks the centre for the centre portal. Personas are built in `src/server/auth/prototype.ts` from the real role capabilities (minus `users:manage`; DOB/parents only with `RCMS_PROTOTYPE_SHOW_PII=1`). Do not re-introduce login, sessions or user tables.
 - Never weaken the capability/scope checks because "it's a prototype" – the portals are only as safe as those checks.
+- Work happens on the **`dev`** branch (Vercel Production Branch). The national workbook is imported from the Administrator portal (browser → `/api/imports/stage*` → staging tables → `runAthleteImport`) or `npm run import:athletes`.
 
 ## Rules
 

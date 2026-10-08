@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const isProd = process.env.NODE_ENV === "production";
 
 // Next.js needs inline scripts/styles for hydration; everything else is locked to same-origin.
-const csp = [
+const cspDirectives = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
@@ -15,21 +15,21 @@ const csp = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "upgrade-insecure-requests",
-].join("; ");
+];
+const csp = cspDirectives.join("; ");
+// The workbook import unzips the .xlsx in the browser; for big files the unzip library spawns a blob: Web Worker.
+// Allow exactly that, and only on the imports page (everything else keeps worker-src → script-src → 'self').
+const importsCsp = [...cspDirectives, "worker-src 'self' blob:"].join("; ");
 
-const securityHeaders = [
+const baseHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-  ...(isProd
-    ? [
-        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-        { key: "Content-Security-Policy", value: csp },
-      ]
-    : []),
 ];
+const hsts = isProd ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }] : [];
+const cspHeader = (value: string) => (isProd ? [{ key: "Content-Security-Policy", value }] : []);
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -40,7 +40,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "postgres", "read-excel-file"],
   async headers() {
     return [
-      { source: "/:path*", headers: securityHeaders },
+      // Exactly one CSP header per response: the imports page gets the variant with worker-src, all others the strict one.
+      { source: "/:path((?!imports(?:/|$)).*)", headers: [...baseHeaders, ...hsts, ...cspHeader(csp)] },
+      { source: "/imports", headers: [...baseHeaders, ...hsts, ...cspHeader(importsCsp)] },
+      { source: "/imports/:rest+", headers: [...baseHeaders, ...hsts, ...cspHeader(csp)] },
       // API responses must never be cached by shared caches (they contain athlete data).
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];

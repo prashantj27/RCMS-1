@@ -23,11 +23,15 @@ export async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Reads the file into a matrix (row 0 = header). Uses the AthleteMaster sheet when present, else the first sheet. */
+/**
+ * Reads the file into a matrix (row 0 = header). Uses the AthleteMaster sheet when present, else the first sheet.
+ * The "universal" build is used on purpose: the "browser" build parses in a blob: Web Worker, which our strict
+ * Content-Security-Policy (no worker-src) refuses, so the read would hang forever.
+ */
 export async function readMatrix(file: File, buf: ArrayBuffer): Promise<unknown[][]> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx")) {
-    const { readSheet, SheetNotFoundError } = await import("read-excel-file/browser");
+    const { readSheet, SheetNotFoundError } = await import("read-excel-file/universal");
     const blob = new Blob([buf]);
     try {
       return (await readSheet(blob, "AthleteMaster")) as unknown[][];
