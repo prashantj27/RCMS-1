@@ -120,8 +120,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build (same command Vercel runs, minus nothing)
         run: npm run build
-      - name: Playwright
+      - name: Playwright – prototype portals (default behaviour, no sign-in)
         run: npx playwright test
+      - name: Playwright – login mode (RCMS_AUTH_MODE=login)
+        run: npx playwright test
+        env:
+          E2E_AUTH_MODE: login
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

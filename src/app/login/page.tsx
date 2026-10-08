@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/server/auth/current-user";
+import { authMode } from "@/server/env";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  if (await getSessionUser()) redirect("/");
+  if (authMode() === "prototype") redirect("/"); // no sign-in in prototype mode
+  if (await getSessionUser()) redirect("/dashboard");
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-900 px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">

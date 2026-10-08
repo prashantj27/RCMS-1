@@ -21,7 +21,7 @@ export function LoginForm() {
         body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
       });
       if (res.ok) {
-        router.replace("/");
+        router.replace("/dashboard");
         router.refresh();
         return;
       }

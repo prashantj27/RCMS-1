@@ -1,12 +1,12 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "./db/client";
 import { rows } from "./db/util";
-import { isProd } from "./env";
+import { authMode, isProd } from "./env";
 import { AppError } from "./errors";
 
-/** True when sessions can be signed: a real AUTH_SECRET in production (any value in dev/test). */
+/** True when sessions can be signed: not needed in prototype mode; a real AUTH_SECRET in production login mode. */
 export function authSecretConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  return !isProd() || (env.AUTH_SECRET ?? "").length >= 32;
+  return authMode(env) === "prototype" || !isProd() || (env.AUTH_SECRET ?? "").length >= 32;
 }
 
 /** SQLSTATE of a Postgres error, however the driver wraps it (postgres-js, PGlite, Drizzle's DrizzleQueryError). */

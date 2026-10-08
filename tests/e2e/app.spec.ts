@@ -56,7 +56,7 @@ test.describe("authentication", () => {
 
   test("cross-origin mutations are rejected", async ({ page }) => {
     await loginOk(page, "admin");
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL(/\/dashboard$/);
     const res = await page.request.patch("/api/athletes/100001", { data: { shoeSize: 7 }, headers: { Origin: "https://evil.example" } });
     expect(res.status()).toBe(403);
   });

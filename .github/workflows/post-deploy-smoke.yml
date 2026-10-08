@@ -36,14 +36,14 @@ jobs:
           done
           cat health.json; echo
           [ "$code" = "200" ] && grep -q '"db":"up"' health.json
-      - name: Login page is served with hardening headers
+      - name: Home page is served with hardening headers
         run: |
           hdr=()
           [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")
-          curl -sSI "${hdr[@]}" "$URL/login" | tee headers.txt
+          curl -sSI "${hdr[@]}" "$URL/" | tee headers.txt
           grep -qi '^x-frame-options: deny' headers.txt
           grep -qi '^content-security-policy:' headers.txt
-      - name: API refuses anonymous access
+      - name: API refuses requests before a portal is chosen / signed in
         run: |
           hdr=()
           [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")

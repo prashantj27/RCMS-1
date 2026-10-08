@@ -3,13 +3,19 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Capability } from "@/domain/permissions";
 import { getDb } from "../db/client";
-import { SESSION_COOKIE } from "../env";
+import { SESSION_COOKIE, authMode } from "../env";
 import { forbidden, unauthorized } from "../errors";
 import { loadUser, type SessionUser } from "./authenticate";
+import { getPrototypeUser } from "./prototype";
 import { sessionVersion, verifySession } from "./session";
 
-/** Resolves the signed-in user for this request (or null). Re-checks the DB so deactivation is immediate. */
+/**
+ * Resolves the current user for this request (or null).
+ *  - prototype mode: the portal chosen on the home page (no credentials)
+ *  - login mode: the signed-in account; the DB is re-checked so deactivation is immediate
+ */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
+  if (authMode() === "prototype") return getPrototypeUser();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const claims = await verifySession(token);
@@ -21,10 +27,10 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   return safe;
 });
 
-/** For pages / layouts: redirects to /login or throws a 403 for missing capability. */
+/** For pages / layouts: redirects to the portal chooser (prototype) or /login, or to /forbidden for a missing capability. */
 export async function requireUser(cap?: Capability): Promise<SessionUser> {
   const user = await getSessionUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(authMode() === "prototype" ? "/" : "/login");
   if (cap && !user.caps.has(cap)) redirect("/forbidden");
   return user;
 }

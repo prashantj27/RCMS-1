@@ -13,7 +13,7 @@ export function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?:
   return (
     <ul className="space-y-1">
       {items.map((i) => {
-        const active = i.href === "/" ? pathname === "/" : pathname === i.href || pathname.startsWith(`${i.href}/`);
+        const active = pathname === i.href || pathname.startsWith(`${i.href}/`);
         return (
           <li key={i.href}>
             <Link

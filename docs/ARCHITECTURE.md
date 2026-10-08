@@ -48,6 +48,8 @@ drizzle/      SQL migrations (generated, committed)
 
 ## Security model
 
+> **Prototype mode (default)** has no authentication: the home page selects a _persona_ (cookie `rcms_portal`, plus `rcms_centre` for the centre portal) and every capability / scope check below is applied to that persona. Identity is not verified, so the mode is for demos with synthetic data or platform-protected deployments only. Everything in the _login mode_ bullets below applies when `RCMS_AUTH_MODE=login`.
+
 - **AuthN:** email + password (bcrypt cost 12, 12-char minimum). Session = HS256 JWT in an `httpOnly`, `SameSite=Lax`, `Secure` cookie, 8 h. The token carries a fingerprint of the password hash, so a password change signs the user out everywhere. The user row is re-read on every request: deactivation is immediate.
 - **Brute force:** 5 failures → 15-minute lock (stored in DB, so it works across serverless instances). Unknown users cost the same bcrypt time as real ones; errors are generic.
 - **AuthZ:** capabilities per role (`domain/permissions.ts`). **Scope**: `CENTRE_USER` is restricted to assigned academies in _every_ query; out-of-scope records return **404**, not 403.

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Badge, BarList, Card, Meter, PageHeader, Stat } from "@/components/ui";
 import { fmt, pct } from "@/lib/format";
 import { getSessionUser } from "@/server/auth/current-user";
+import { authMode } from "@/server/env";
 import { getDb } from "@/server/db/client";
 import { getOverview } from "@/server/services/analytics";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(authMode() === "prototype" ? "/" : "/login");
   if (!user.caps.has("analytics:read")) redirect(user.caps.has("athletes:read") ? "/athletes" : "/forbidden");
   const db = await getDb();
   const o = await getOverview(db, user);
@@ -46,7 +47,11 @@ export default async function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description={
-          user.scope.academyIds !== null ? "Figures for your assigned centres." : "National overview of enrolled athletes and centres."
+          user.scope.academyIds === null
+            ? "National overview of enrolled athletes and centres."
+            : user.scope.academyIds.length === 1
+              ? "Figures for your centre."
+              : "Figures for your assigned centres."
         }
       />
 
@@ -68,7 +73,7 @@ export default async function DashboardPage() {
         <Card title="Athletes by centre type">
           <BarList
             items={o.byCentreType.map((c) => ({
-              label: `${c.label} · ${fmt(c.academies)} centres`,
+              label: `${c.label} · ${fmt(c.academies)} ${c.academies === 1 ? "centre" : "centres"}`,
               count: c.count,
               href: canDrill && c.key !== "none" ? `/athletes?centreTypeId=${c.key}` : undefined,
             }))}

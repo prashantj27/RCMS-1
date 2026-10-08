@@ -10,6 +10,13 @@ This system processes personal data of **minors** (names, parents' names, dates 
 4. **No secrets in the repo.** Configuration comes from environment variables (`.env.example` lists them). Account passwords live only in the host's environment (mark them _Sensitive_ in Vercel) and are stored in the database only as bcrypt hashes.
 5. **Production data stays in production.** Do not copy it to Preview/dev databases; use `npm run db:seed`.
 
+## Prototype mode (default) vs login mode
+
+Out of the box RCMS runs in **prototype mode: there is no authentication**. The home page lets anyone choose a user type and open that portal
+(permissions are still enforced per portal, and centre portals are limited to one centre), but _who_ is using it is not verified.
+Therefore: **only synthetic data may be loaded into an internet-reachable prototype**, or the deployment must be protected at the platform level
+(Vercel Deployment Protection, VPN, IP allow-list). Set `RCMS_AUTH_MODE=login` before any real athlete data is loaded.
+
 ## Reporting a vulnerability
 
 Please do **not** open a public issue. Report privately via GitHub → Security → _Report a vulnerability_,

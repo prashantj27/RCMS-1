@@ -27,7 +27,13 @@ npm run db:seed         # synthetic demo data in ./.data/pglite (embedded Postgr
 npm run dev             # http://localhost:3000
 ```
 
-Demo logins (password `Demo-Passw0rd-2026`): **`admin`**, **`hq`**, **`centre`**, **`analyst`** – plain usernames; emails also work as login ids.
+**There is no sign-in (prototype mode).** The first page offers one button per user type – **Administrator, HQ officer, Centre user, Analyst** –
+and each opens that role's portal with exactly that role's permissions. The Centre user button first asks which centre you want to be.
+Every page has a **Home** button (and a banner) to go back and switch user type.
+
+> ⚠️ **Prototype mode means anyone who can open the URL can use every portal, including editing.**
+> Use it only with synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN.
+> To switch real authentication back on set `RCMS_AUTH_MODE=login` (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 
 Prefer a real Postgres? `docker compose up -d` then
 `DATABASE_URL=postgres://rcms:rcms@localhost:5432/rcms npm run db:migrate && npm run db:seed`.
@@ -57,7 +63,7 @@ npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx             #
 
 ## Deploying
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), add `AUTH_SECRET` and the `RCMS_*_PASSWORD` account variables, deploy.
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), deploy. Prototype mode needs no other variables.
 Every push to a branch gets a Preview; every merge to `main` goes to Production, gated by CI.
 
 ## Documentation

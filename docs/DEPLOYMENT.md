@@ -1,5 +1,17 @@
 # Deployment (Vercel + Postgres) and CI/CD
 
+## 0. Choose the access mode
+
+| Mode                               | When                                                                                       | Variables needed                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| **Prototype** (default)            | demos / stakeholder walk-throughs. No sign-in; the home page has one button per user type. | only the database (`DATABASE_URL`, injected by Neon)   |
+| **Login** (`RCMS_AUTH_MODE=login`) | real use. Username/email + password, sessions, lockout, audit of sign-ins.                 | + `AUTH_SECRET`, `RCMS_*_PASSWORD` (section 1.2 / 1.3) |
+
+> ⚠️ **In prototype mode anyone with the link can open every portal and edit data.** Do not load the real athlete workbook (minors' personal data)
+> into a prototype that is reachable from the internet. Either keep the data synthetic (`npm run db:seed`), or enable **Vercel Deployment Protection**
+> (Project → Settings → Deployment Protection → _Vercel Authentication_) so only your team can open the site, or switch to login mode before importing real data.
+> Switching modes needs no data migration: set/remove `RCMS_AUTH_MODE=login` and redeploy.
+
 ## 1. One-time setup
 
 ### 1.1 Create the Neon database from Vercel (recommended)
@@ -26,7 +38,7 @@ scale-to-zero cold start of a few hundred ms), DDL/imports on the direct connect
 
 1. Vercel → **Add New → Project → Import Git Repository** → `KheloIndiaAI/RCMS`.
 2. Framework preset: **Next.js** (auto-detected). Leave build/install commands – `vercel.json` sets `npm ci` and `npm run vercel-build`.
-3. **Environment Variables:** `DATABASE_URL*` already come from the Neon integration (step 1.1). Add:
+3. **Environment Variables:** `DATABASE_URL*` already come from the Neon integration (step 1.1). **Prototype mode needs nothing else.** For **login mode** also add `RCMS_AUTH_MODE=login` and:
 
    | Variable                  | Value                                                                                         |
    | ------------------------- | --------------------------------------------------------------------------------------------- |
@@ -45,7 +57,7 @@ scale-to-zero cold start of a few hundred ms), DDL/imports on the direct connect
 
 ### 1.3 Accounts and first data load
 
-**Accounts.** On every Production build, `vercel-build` runs `scripts/provision-users.ts` after the migrations: it creates the accounts above
+**Accounts (login mode).** On every Production build, `vercel-build` runs `scripts/provision-users.ts` after the migrations: it creates the accounts above
 and, if you later change a password variable and redeploy, updates that account's password (old sessions end). It never deletes users,
 never re-enables an account an admin deactivated, and never changes an existing account's role. Problems (for example a password that
 breaks the policy) are printed as warnings in the build log and do **not** fail the deploy – check the log line `[provision] …`.
