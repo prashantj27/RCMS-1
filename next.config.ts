@@ -37,6 +37,8 @@ const nextConfig: NextConfig = {
   // PGlite is only used for zero-setup local development / tests; never bundle it.
   // Never bundle local dev databases / test output into serverless functions.
   outputFileTracingExcludes: { "*": [".data/**", "test-results/**", "playwright-report/**", "coverage/**"] },
+  // The in-app "Set up database" button applies the SQL migrations at runtime, so ship them with that function.
+  outputFileTracingIncludes: { "/api/setup": ["./drizzle/**"] },
   serverExternalPackages: ["@electric-sql/pglite", "postgres", "read-excel-file"],
   async headers() {
     return [

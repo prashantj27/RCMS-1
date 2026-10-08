@@ -28,7 +28,10 @@ button opens that portal with that role's permissions. The only required configu
 3. **Deploy.** Framework preset Next.js; `vercel.json` sets `npm ci` and `npm run vercel-build`, which runs the migrations and then `next build`.
    Production builds always apply pending migrations. Preview builds apply them only when the database is still empty (no `athletes` table)
    or when `ALLOW_PREVIEW_MIGRATE=1` is set, so a PR can never change a shared database by accident.
-4. **Check.** Open `https://<app>.vercel.app/api/health` → `"status":"ok"`, `"migrations":true`. `"data":false` just means no data yet.
+4. **Check.** Open `https://<app>.vercel.app/api/health` → `"status":"ok"`, `"migrations":true`. If something is wrong it adds `"problem"` and a `"hint"` in plain words
+   (`no_database_url`, `cannot_connect`, `auth_failed`, `database_missing`, `migrations_missing`). Every portal page shows the same message instead of a bare error.
+   **Database variables only reach deployments built after they were added**, and the tables are created during the build; if the database was
+   connected after the first deploy, either redeploy or open _Administrator → Set up database_ (applies the migrations at runtime, idempotent). `"data":false` just means no data yet.
    `"version"` is the first 7 characters of the deployed commit. The first page must show **four user-type buttons** and no password field.
 5. **Load the workbook into Neon (from the browser, no CLI needed).** Home → **Administrator** → **Data imports** → choose
    `RC_monitoring_Athlete_Details_V1.xlsx` → **Validate (dry run)** to preview → **Import**. Keep the tab open (≈ 1 minute for 65 k rows).

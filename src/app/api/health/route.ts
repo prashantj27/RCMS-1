@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/server/db/client";
 import { appVersion } from "@/server/env";
-import { getSetupChecks } from "@/server/setup";
+import { classifyDbError, getSetupChecks } from "@/server/setup";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +15,10 @@ export async function GET() {
   const base = { version: appVersion(), time: new Date().toISOString() };
   try {
     const checks = await getSetupChecks(await getDb());
-    return NextResponse.json({ status: checks.migrations ? "ok" : "setup_required", db: "up", checks, ...base });
+    const missing = checks.migrations ? {} : classifyDbError({ code: "42P01" });
+    return NextResponse.json({ status: checks.migrations ? "ok" : "setup_required", db: "up", checks, ...missing, ...base });
   } catch (e) {
     console.error("[health] database check failed", e);
-    return NextResponse.json({ status: "degraded", db: "down", ...base }, { status: 503 });
+    return NextResponse.json({ status: "degraded", db: "down", ...classifyDbError(e), ...base }, { status: 503 });
   }
 }

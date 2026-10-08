@@ -83,6 +83,19 @@ test.describe("security headers", () => {
   });
 });
 
+test.describe("database setup", () => {
+  test("Set up database is idempotent on a ready database, Administrator only", async ({ page }) => {
+    await open(page, "admin");
+    const res = await page.request.post("/api/setup");
+    expect(res.status()).toBe(200);
+    expect((await res.json()).checks).toMatchObject({ database: true, migrations: true });
+    await page.goto("/enter/hq");
+    expect((await page.request.post("/api/setup")).status()).toBe(403);
+    await page.goto("/dashboard");
+    await expect(page.getByTestId("setup-panel")).toHaveCount(0);
+  });
+});
+
 test.describe("demo data loader", () => {
   test("is refused once the registry has athletes (never mixes with real data) and for non-admin portals", async ({ page }) => {
     await open(page, "admin");

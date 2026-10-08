@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { syntheticAthleteMatrix } from "@/dev/synthetic-athletes";
 import { createDb } from "@/server/db/client";
 import { runAthleteImport } from "@/server/import/run-import";
-import { getSetupChecks } from "@/server/setup";
+import { sql } from "drizzle-orm";
+import { classifyDbError, getSetupChecks } from "@/server/setup";
 import { testDb } from "../helpers/db";
 
 describe("deployment readiness checks (/api/health)", () => {
@@ -28,5 +29,31 @@ describe("deployment readiness checks (/api/health)", () => {
     } finally {
       await migrated.close();
     }
+  });
+});
+
+describe("database problem classification (shown to the operator, never contains secrets)", () => {
+  it("treats a database built by an older release (newest tables missing) as not migrated", async () => {
+    const h = await testDb();
+    try {
+      await h.db.execute(sql`drop table import_stage_rows, import_stages`);
+      expect(await getSetupChecks(h.db)).toMatchObject({ database: true, migrations: false });
+    } finally {
+      await h.close();
+    }
+  });
+
+  it.each([
+    [new Error("DATABASE_URL is not set. Connect a Neon database"), "no_database_url"],
+    [Object.assign(new Error("x"), { code: "ENOTFOUND" }), "cannot_connect"],
+    [Object.assign(new Error("x"), { code: "CONNECT_TIMEOUT" }), "cannot_connect"],
+    [{ cause: { code: "28P01" } }, "auth_failed"],
+    [Object.assign(new Error("password=hunter2"), { code: "3D000" }), "database_missing"],
+    [{ code: "42P01" }, "migrations_missing"],
+    [new Error("boom"), "unknown"],
+  ])("%#", (error, problem) => {
+    const c = classifyDbError(error);
+    expect(c.problem).toBe(problem);
+    expect(c.hint).not.toMatch(/hunter2|postgres:\/\//);
   });
 });
