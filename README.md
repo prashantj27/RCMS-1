@@ -57,7 +57,7 @@ npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx             #
 
 ## Deploying
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add `DATABASE_URL` and `AUTH_SECRET`, deploy.
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), add `AUTH_SECRET`, deploy.
 Every push to a branch gets a Preview; every merge to `main` goes to Production, gated by CI.
 
 ## Documentation

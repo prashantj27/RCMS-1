@@ -1,5 +1,5 @@
 /**
- * Applies SQL migrations from ./drizzle to DATABASE_URL.
+ * Applies SQL migrations from ./drizzle using DATABASE_URL_UNPOOLED (Neon direct) or DATABASE_URL.
  *
  *   npm run db:migrate            apply (fails if DATABASE_URL is missing)
  *   tsx scripts/migrate.ts --vercel   build-time mode used by `vercel-build`:
@@ -8,10 +8,11 @@
  *         can never alter a shared database by accident
  */
 import { createDb } from "../src/server/db/client";
+import { directDatabaseUrl } from "../src/server/db/url";
 
 async function main() {
   const vercelMode = process.argv.includes("--vercel");
-  const url = process.env.DATABASE_URL;
+  const url = directDatabaseUrl(); // un-pooled when available (Neon): DDL belongs on a direct connection
 
   if (vercelMode) {
     if (!url) {

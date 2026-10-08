@@ -9,13 +9,13 @@
  *   --as-of YYYY-MM-DD   reference date for "future"/age rules (default: today)
  *   --by <email>     attribute the batch to an existing user
  *
- * Uses DATABASE_URL (or the local PGlite dev database when unset).
+ * Uses DATABASE_URL_UNPOOLED / DATABASE_URL (or the local PGlite dev database when neither is set).
  * The workbook contains personal data of minors: keep it out of git and shared drives.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
-import { closeDb, getDb } from "../src/server/db/client";
+import { createDb } from "../src/server/db/client";
 import { users } from "../src/server/db/schema";
 import { matrixFromFile, sha256, ImportFileError } from "../src/server/import/parse-file";
 import { runAthleteImport } from "../src/server/import/run-import";
@@ -25,6 +25,8 @@ function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
+
+let closeHandle: () => Promise<void> = async () => undefined;
 
 async function main() {
   const asOfArg = arg("--as-of");
@@ -42,7 +44,9 @@ async function main() {
   }
 
   const buf = fs.readFileSync(file);
-  const db = await getDb();
+  const handle = await createDb({ direct: true });
+  closeHandle = () => handle.close();
+  const db = handle.db;
   let createdBy: string | null = null;
   const by = byArg;
   if (by) {
@@ -102,9 +106,9 @@ async function main() {
 }
 
 main()
-  .then(() => closeDb())
+  .then(() => closeHandle())
   .catch(async (e) => {
     console.error(e instanceof ImportFileError ? `Import failed: ${e.message}` : e);
-    await closeDb().catch(() => undefined);
+    await closeHandle().catch(() => undefined);
     process.exit(1);
   });

@@ -5,6 +5,7 @@ import type * as PgliteMigrator from "drizzle-orm/pglite/migrator";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type * as Pglite from "@electric-sql/pglite";
 import * as schema from "./schema";
+import { databaseUrl, directDatabaseUrl } from "./url";
 import { isProd, isTest } from "../env";
 
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -24,9 +25,12 @@ const runtimeImport = <T>(specifier: string): Promise<T> =>
 
 export const migrationsFolder = () => path.join(process.cwd(), "drizzle");
 
-/** Connect to Postgres (DATABASE_URL) or, for local development / tests, to an embedded PGlite. */
-export async function createDb(opts: { url?: string; pgliteDir?: string; migrate?: boolean } = {}): Promise<DbHandle> {
-  const url = opts.url ?? process.env.DATABASE_URL;
+/**
+ * Connect to Postgres or, for local development / tests, to an embedded PGlite.
+ * `direct: true` prefers the un-pooled URL (migrations, bulk imports).
+ */
+export async function createDb(opts: { url?: string; direct?: boolean; pgliteDir?: string; migrate?: boolean } = {}): Promise<DbHandle> {
+  const url = opts.url ?? (opts.direct ? directDatabaseUrl() : databaseUrl());
   if (url) {
     const [{ default: postgres }, { drizzle }] = await Promise.all([import("postgres"), import("drizzle-orm/postgres-js")]);
     // prepare:false keeps us compatible with transaction-mode poolers (Neon, Supabase, PgBouncer).
@@ -46,7 +50,9 @@ export async function createDb(opts: { url?: string; pgliteDir?: string; migrate
   }
 
   if (isProd() && process.env.RCMS_ALLOW_PGLITE !== "1") {
-    throw new Error("DATABASE_URL is not set. Configure a Postgres connection string (see docs/DEPLOYMENT.md).");
+    throw new Error(
+      "DATABASE_URL is not set. Connect a Neon database in Vercel (Storage) or set a Postgres connection string – see docs/DEPLOYMENT.md.",
+    );
   }
   const [{ PGlite }, { drizzle }] = await Promise.all([
     runtimeImport<typeof Pglite>("@electric-sql/pglite"),

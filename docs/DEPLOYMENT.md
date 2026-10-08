@@ -2,29 +2,40 @@
 
 ## 1. One-time setup
 
-### 1.1 Create the database
+### 1.1 Create the Neon database from Vercel (recommended)
 
-Any Postgres 14+ works. Recommended: **Neon** (Vercel Marketplace → Storage → Neon) in an **India/Singapore** region
-(`aws-ap-south-1` / `aws-ap-southeast-1`) – close to the Vercel function region `bom1` set in `vercel.json`.
-Use the **pooled** connection string (host contains `-pooler`). The app uses `prepare:false`, so it is PgBouncer-safe.
+1. Vercel → your project → **Storage** → **Create Database** → **Neon** (Marketplace) → pick the region closest to your users
+   (India/Singapore, i.e. the AWS Asia-Pacific region Neon offers) → connect it to this project for **Production, Preview and Development**.
+2. Neon injects the connection variables automatically – you do not copy anything by hand:
+
+   | Injected variable                                 | Used for                                                    |
+   | ------------------------------------------------- | ----------------------------------------------------------- |
+   | `DATABASE_URL` (pooled, host contains `-pooler`)  | the running app (serverless functions)                      |
+   | `DATABASE_URL_UNPOOLED` (direct)                  | migrations in `vercel-build` and the CLI importer           |
+   | `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `PG*` | aliases – RCMS reads them as fallbacks, nothing else needed |
+
+3. **Preview databases (recommended):** in the integration settings enable **Create a database branch for each preview deployment**.
+   Each PR then gets an isolated copy-on-write branch of production data's _schema and data_; because that copy can contain real athlete
+   records, keep Vercel **Deployment Protection** on for Previews. Then add `ALLOW_PREVIEW_MIGRATE=1` (Preview scope only) so new migrations
+   are applied to each preview branch. Without branching, leave it unset: previews will not touch the database schema.
+
+RCMS is Neon-ready: `prepare:false` (PgBouncer transaction mode), `sslmode=require` honoured, connect timeout 15 s (covers Neon's
+scale-to-zero cold start of a few hundred ms), DDL/imports on the direct connection. Any other Postgres 14+ works too – just set `DATABASE_URL`.
 
 ### 1.2 Connect the repo to Vercel
 
 1. Vercel → **Add New → Project → Import Git Repository** → `KheloIndiaAI/RCMS`.
 2. Framework preset: **Next.js** (auto-detected). Leave build/install commands – `vercel.json` sets `npm ci` and `npm run vercel-build`.
-3. **Environment Variables** (Production **and** Preview):
-
-   | Name           | Value                                                   |
-   | -------------- | ------------------------------------------------------- |
-   | `DATABASE_URL` | pooled Postgres URL from step 1.1                       |
-   | `AUTH_SECRET`  | `openssl rand -base64 48` (use a different one per env) |
-
-4. Deploy. `vercel-build` runs `drizzle` migrations **before** `next build` (Production only – see 3).
+3. **Environment Variables:** add only **`AUTH_SECRET`** (`openssl rand -base64 48`; a different value for Production and Preview).
+   `DATABASE_URL*` already come from the Neon integration (step 1.1).
+4. Deploy. `vercel-build` runs migrations **before** `next build` (Production only by default – see section 3).
 
 ### 1.3 First data load (from your machine – the 10 MB workbook exceeds Vercel's 4.5 MB request limit)
 
 ```bash
-export DATABASE_URL='postgres://…pooler…/rcms?sslmode=require'
+# Pull the Neon variables Vercel already holds (Production):
+vercel env pull .env.production.local --environment=production   # then: set -a; . ./.env.production.local; set +a
+# (or export DATABASE_URL_UNPOOLED='postgres://…/neondb?sslmode=require' by hand – the CLI prefers the direct URL)
 ADMIN_EMAIL=you@org.in ADMIN_PASSWORD='a-long-unique-passphrase' npm run db:bootstrap-admin
 npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx --dry-run
 npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx --by you@org.in
@@ -72,19 +83,20 @@ PR ──review + "CI passed" required──► merge to main ──► Vercel P
 
 ## 5. Operations
 
-| Concern          | How                                                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Uptime           | Point any monitor at `/api/health` (200 = app + DB up, 503 = DB down)                                                        |
-| Logs             | Vercel → Logs (structured `console.error` for unhandled API errors; no PII is logged)                                        |
-| Audit            | `audit_log` table, `GET /api/audit` (admin)                                                                                  |
-| Backups          | Neon PITR (set retention ≥ 7 days) – **this database holds minors' data; confirm retention policy**                          |
-| Secrets rotation | Change `AUTH_SECRET` → everyone is signed out. Change a user's password → only their sessions end                            |
-| Scaling          | Serverless functions scale out; pool is `DB_POOL_MAX` (default 5) per instance – keep `instances × 5` below the pooler limit |
+| Concern          | How                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Uptime           | Point any monitor at `/api/health` (200 = app + DB up, 503 = DB down)                                                                                                                      |
+| Logs             | Vercel → Logs (structured `console.error` for unhandled API errors; no PII is logged)                                                                                                      |
+| Audit            | `audit_log` table, `GET /api/audit` (admin)                                                                                                                                                |
+| Backups          | Neon PITR (set retention ≥ 7 days) – **this database holds minors' data; confirm retention policy**                                                                                        |
+| Secrets rotation | Change `AUTH_SECRET` → everyone is signed out. Change a user's password → only their sessions end                                                                                          |
+| Scaling          | Serverless functions scale out; each instance keeps ≤ `DB_POOL_MAX` (default 5) connections to Neon's pooler, which multiplexes up to thousands of clients – no tuning needed at this size |
+| Cost             | Neon scales compute to zero when idle (first request after idle is a bit slower); raise the autosuspend delay or minimum compute if that matters                                           |
 
 ## 6. Go-live checklist
 
 - [ ] `AUTH_SECRET` set (≥ 32 random chars) in Production; different from Preview
-- [ ] `DATABASE_URL` is the pooled endpoint with `sslmode=require`; DB region is in India/Singapore
+- [ ] Neon integration connected to Production + Preview (`DATABASE_URL` pooled and `DATABASE_URL_UNPOOLED` present); region India/Singapore
 - [ ] Admin bootstrapped; demo accounts (`*@rcms.test`) **not** present (never run `db:seed` on production)
 - [ ] National workbook imported; dashboard totals match the source (64,849 / 2,431 / 75 for V1)
 - [ ] Branch protection on `main` with `CI passed`
