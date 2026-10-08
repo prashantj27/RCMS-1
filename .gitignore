@@ -24,8 +24,8 @@ blob-report/
 *.csv
 !tests/fixtures/*.csv
 !tests/fixtures/synthetic-athletes.xlsx
-data/
-imports/
+/data/
+/imports/
 # misc
 .DS_Store
 *.log

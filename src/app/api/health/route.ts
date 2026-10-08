@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { appVersion } from "@/server/env";
+import { getSetupChecks } from "@/server/setup";
 
 export const dynamic = "force-dynamic";
 
-/** Liveness + database readiness. Deliberately returns no internals. */
+/**
+ * Liveness + readiness. Returns booleans only:
+ *  - 503 `degraded`        the database cannot be reached
+ *  - 200 `setup_required`  app and database are up, but something is not configured yet
+ *                          (migrations not run, AUTH_SECRET missing, no active accounts)
+ *  - 200 `ok`              everything is in place
+ */
 export async function GET() {
+  const base = { version: appVersion(), time: new Date().toISOString() };
   try {
     const db = await getDb();
-    await db.execute(sql`select 1`);
-    return NextResponse.json({ status: "ok", db: "up", version: appVersion(), time: new Date().toISOString() });
+    const checks = await getSetupChecks(db);
+    const ready = checks.migrations && checks.authSecret && checks.accounts;
+    return NextResponse.json({ status: ready ? "ok" : "setup_required", db: "up", checks, ...base });
   } catch (e) {
     console.error("[health] database check failed", e);
-    return NextResponse.json({ status: "degraded", db: "down", version: appVersion(), time: new Date().toISOString() }, { status: 503 });
+    return NextResponse.json({ status: "degraded", db: "down", ...base }, { status: 503 });
   }
 }

@@ -65,7 +65,10 @@ export async function provisionUsers(db: Db, env: Env = process.env): Promise<Pr
   const out: ProvisionResult[] = [];
   for (const spec of ACCOUNT_SPECS) {
     const base = { key: spec.key, role: spec.role };
-    const password = env[`RCMS_${spec.key}_PASSWORD`];
+    // Values pasted into hosting dashboards often carry a trailing newline; that would silently become part of the password.
+    const rawPassword = env[`RCMS_${spec.key}_PASSWORD`];
+    const password = rawPassword?.replace(/[\r\n]+$/, "");
+    const paddedPassword = Boolean(password && password !== password.trim());
     const rawLogin = env[`RCMS_${spec.key}_USERNAME`]?.trim() || spec.defaultLogin;
     if (!password) {
       out.push({ ...base, login: rawLogin, action: "skipped", detail: `RCMS_${spec.key}_PASSWORD is not set` });
@@ -96,7 +99,12 @@ export async function provisionUsers(db: Db, env: Env = process.env): Promise<Pr
           continue;
         }
         await createUser(db, null, { email: login, name, role: spec.role, password, academyIds }, null);
-        out.push({ ...base, login, action: "created" });
+        out.push({
+          ...base,
+          login,
+          action: "created",
+          ...(paddedPassword ? { detail: `RCMS_${spec.key}_PASSWORD has leading/trailing spaces, which are part of the password` } : {}),
+        });
         continue;
       }
       if (existing.role !== spec.role) {

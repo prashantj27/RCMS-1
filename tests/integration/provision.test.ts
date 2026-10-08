@@ -129,3 +129,49 @@ describe("provisionUsers (accounts from environment variables)", () => {
     expect(a!.active).toBe(false);
   });
 });
+
+describe("deployment readiness checks and pasted-value hygiene", () => {
+  it("reports what is missing: no tables → tables but no accounts → ready", async () => {
+    const { createDb } = await import("@/server/db/client");
+    const { getSetupChecks } = await import("@/server/setup");
+    const { createUser } = await import("@/server/services/users");
+    const fresh = await createDb({ url: "", pgliteDir: "memory://", migrate: false });
+    try {
+      expect(await getSetupChecks(fresh.db)).toEqual({ database: true, migrations: false, authSecret: true, accounts: false });
+      // Signing in against an un-migrated database fails with "undefined table", which the login route turns into a 503.
+      const { notConfiguredError, pgErrorCode } = await import("@/server/setup");
+      const err = await authenticate(fresh.db, "admin", "whatever-password-1", null).catch((e) => e);
+      expect(pgErrorCode(err)).toBe("42P01");
+      expect(notConfiguredError(err)).toMatchObject({ status: 503, code: "not_configured" });
+    } finally {
+      await fresh.close();
+    }
+    // migrated database with no users, then with one
+    const migrated = await testDb();
+    try {
+      expect(await getSetupChecks(migrated.db)).toMatchObject({ migrations: true, accounts: false });
+      await createUser(
+        migrated.db,
+        null,
+        { email: "admin", name: "A", role: "ADMIN", password: "Quartz-Meadow-7731!", academyIds: [] },
+        null,
+      );
+      expect(await getSetupChecks(migrated.db)).toEqual({ database: true, migrations: true, authSecret: true, accounts: true });
+    } finally {
+      await migrated.close();
+    }
+  });
+
+  it("strips a trailing newline pasted into a password variable (so the typed password works) and flags padding", async () => {
+    const db2 = await testDb();
+    try {
+      const r = await provisionUsers(db2.db, { RCMS_ADMIN_PASSWORD: "Quartz-Meadow-7731!\n" });
+      expect(r.find((x) => x.key === "ADMIN")?.action).toBe("created");
+      await expect(authenticate(db2.db, "admin", "Quartz-Meadow-7731!", null)).resolves.toBeTruthy();
+      const padded = await provisionUsers(db2.db, { RCMS_HQ_PASSWORD: " Orchid-Lantern-4410# " });
+      expect(padded.find((x) => x.key === "HQ")?.detail).toMatch(/leading\/trailing spaces/);
+    } finally {
+      await db2.close();
+    }
+  });
+});

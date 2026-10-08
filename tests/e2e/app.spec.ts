@@ -48,7 +48,10 @@ test.describe("authentication", () => {
     expect(h["strict-transport-security"]).toContain("max-age");
     const health = await request.get("/api/health");
     expect(health.status()).toBe(200);
-    expect((await health.json()).db).toBe("up");
+    const body = await health.json();
+    expect(body.db).toBe("up");
+    expect(body.status).toBe("ok");
+    expect(body.checks).toEqual({ database: true, migrations: true, authSecret: true, accounts: true });
   });
 
   test("cross-origin mutations are rejected", async ({ page }) => {

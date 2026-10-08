@@ -3,12 +3,13 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # Every branch (this repo's default branch included); Dependabot branches are covered by their pull request.
+    branches-ignore: ["dependabot/**"]
   workflow_dispatch:
 
 # A new push to the same branch/PR cancels the previous run.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -68,7 +69,7 @@ jobs:
           POSTGRES_DB: rcms_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U rcms"
+          --health-cmd "pg_isready -U rcms -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -97,7 +98,7 @@ jobs:
           POSTGRES_DB: rcms_e2e
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U rcms"
+          --health-cmd "pg_isready -U rcms -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
