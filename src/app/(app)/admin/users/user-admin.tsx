@@ -56,9 +56,20 @@ export function CreateUserForm() {
       </div>
       <div>
         <label htmlFor="u-email" className="mb-1 block text-xs font-medium text-slate-600">
-          Email
+          Username or email
         </label>
-        <input id="u-email" name="email" type="email" required maxLength={200} className={inputClass} autoComplete="off" />
+        <input
+          id="u-email"
+          name="email"
+          type="text"
+          required
+          minLength={2}
+          maxLength={200}
+          className={inputClass}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+        />
       </div>
       <div>
         <label htmlFor="u-role" className="mb-1 block text-xs font-medium text-slate-600">

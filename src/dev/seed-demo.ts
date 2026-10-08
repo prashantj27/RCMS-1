@@ -20,10 +20,10 @@ export async function seedDemo(db: Db, opts: { athletes?: number } = {}) {
   });
   const first = (await db.select({ id: academies.id }).from(academies).orderBy(academies.id).limit(3)).map((a) => a.id);
   const demo = [
-    { email: "admin@rcms.test", name: "Demo Admin", role: "ADMIN", academyIds: [] as number[] },
-    { email: "hq@rcms.test", name: "Demo HQ Officer", role: "HQ_OFFICER", academyIds: [] as number[] },
-    { email: "centre@rcms.test", name: "Demo Centre User", role: "CENTRE_USER", academyIds: first },
-    { email: "analyst@rcms.test", name: "Demo Analyst", role: "ANALYST", academyIds: [] as number[] },
+    { email: "admin", name: "Demo Admin", role: "ADMIN", academyIds: [] as number[] },
+    { email: "hq", name: "Demo HQ Officer", role: "HQ_OFFICER", academyIds: [] as number[] },
+    { email: "centre", name: "Demo Centre User", role: "CENTRE_USER", academyIds: first },
+    { email: "analyst", name: "Demo Analyst", role: "ANALYST", academyIds: [] as number[] },
   ] as const;
   const created: string[] = [];
   for (const u of demo) {

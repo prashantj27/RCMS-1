@@ -24,7 +24,7 @@ export default async function UsersPage() {
         <thead>
           <tr>
             <Th>Name</Th>
-            <Th>Email</Th>
+            <Th>Login</Th>
             <Th>Role</Th>
             <Th>Centres</Th>
             <Th>Status</Th>

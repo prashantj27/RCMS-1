@@ -37,9 +37,18 @@ export function LoginForm() {
     <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
       <div>
         <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-          Email
+          Username or email
         </label>
-        <input id="email" name="email" type="email" autoComplete="username" required className={inputClass} />
+        <input
+          id="email"
+          name="email"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          required
+          className={inputClass}
+        />
       </div>
       <div>
         <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">

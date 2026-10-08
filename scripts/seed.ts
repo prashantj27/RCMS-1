@@ -5,7 +5,7 @@
  *   npm run db:seed
  *
  * Demo logins (password: SEED_PASSWORD, default "Demo-Passw0rd-2026"):
- *   admin@rcms.test  hq@rcms.test  centre@rcms.test (first 3 academies)  analyst@rcms.test
+ *   admin  hq  centre (first 3 academies)  analyst
  */
 import { DEMO_PASSWORD, seedDemo } from "../src/dev/seed-demo";
 import { createDb } from "../src/server/db/client";

@@ -26,22 +26,45 @@ scale-to-zero cold start of a few hundred ms), DDL/imports on the direct connect
 
 1. Vercel → **Add New → Project → Import Git Repository** → `KheloIndiaAI/RCMS`.
 2. Framework preset: **Next.js** (auto-detected). Leave build/install commands – `vercel.json` sets `npm ci` and `npm run vercel-build`.
-3. **Environment Variables:** add only **`AUTH_SECRET`** (`openssl rand -base64 48`; a different value for Production and Preview).
-   `DATABASE_URL*` already come from the Neon integration (step 1.1).
+3. **Environment Variables:** `DATABASE_URL*` already come from the Neon integration (step 1.1). Add:
+
+   | Variable                  | Value                                                                                         |
+   | ------------------------- | --------------------------------------------------------------------------------------------- |
+   | `AUTH_SECRET`             | `openssl rand -base64 48` (different for Production and Preview)                              |
+   | `RCMS_ADMIN_PASSWORD`     | password for login **`admin`**                                                                |
+   | `RCMS_HQ_PASSWORD`        | password for login **`hq`**                                                                   |
+   | `RCMS_CENTRE_PASSWORD`    | password for login **`centre`**                                                               |
+   | `RCMS_CENTRE_ACADEMY_IDS` | comma-separated centre ids the `centre` login may see, e.g. `3010,888` (see the Centres page) |
+   | `RCMS_ANALYST_PASSWORD`   | password for login **`analyst`**                                                              |
+
+   Rules: login ids are the plain usernames `admin`, `hq`, `centre`, `analyst` (case-insensitive; override with `RCMS_<ROLE>_USERNAME`).
+   Passwords must be ≥ 12 characters and must not contain the username (so `admin@12345` is rejected). An account whose password
+   variable is unset is simply not created. Mark the password variables **Sensitive** in Vercel.
+
 4. Deploy. `vercel-build` runs migrations **before** `next build` (Production only by default – see section 3).
 
-### 1.3 First data load (from your machine – the 10 MB workbook exceeds Vercel's 4.5 MB request limit)
+### 1.3 Accounts and first data load
+
+**Accounts.** On every Production build, `vercel-build` runs `scripts/provision-users.ts` after the migrations: it creates the accounts above
+and, if you later change a password variable and redeploy, updates that account's password (old sessions end). It never deletes users,
+never re-enables an account an admin deactivated, and never changes an existing account's role. Problems (for example a password that
+breaks the policy) are printed as warnings in the build log and do **not** fail the deploy – check the log line `[provision] …`.
+
+**Data.** The 10 MB workbook exceeds Vercel's 4.5 MB request limit, so load it once from your machine:
 
 ```bash
 # Pull the Neon variables Vercel already holds (Production):
 vercel env pull .env.production.local --environment=production   # then: set -a; . ./.env.production.local; set +a
 # (or export DATABASE_URL_UNPOOLED='postgres://…/neondb?sslmode=require' by hand – the CLI prefers the direct URL)
-ADMIN_EMAIL=you@org.in ADMIN_PASSWORD='a-long-unique-passphrase' npm run db:bootstrap-admin
 npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx --dry-run
-npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx --by you@org.in
+npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx
 ```
 
-Then sign in at your Vercel URL, create further users under **Users**, and verify `GET /api/health` → `{"status":"ok","db":"up"}`.
+**Order matters for the `centre` account.** A brand-new database has no centres until the workbook is loaded, so on the very first deploy
+the `centre` account is reported as `skipped`. After the import: look up the centre ids (sign in as `admin` → Academies & centres),
+set `RCMS_CENTRE_ACADEMY_IDS`, and redeploy (or run `npm run db:provision-users` locally with the same variables). From then on it is kept in sync.
+
+Then sign in as `admin` at your Vercel URL and verify `GET /api/health` → `{"status":"ok","db":"up"}`.
 
 ## 2. CI/CD flow
 
@@ -97,7 +120,7 @@ PR ──review + "CI passed" required──► merge to main ──► Vercel P
 
 - [ ] `AUTH_SECRET` set (≥ 32 random chars) in Production; different from Preview
 - [ ] Neon integration connected to Production + Preview (`DATABASE_URL` pooled and `DATABASE_URL_UNPOOLED` present); region India/Singapore
-- [ ] Admin bootstrapped; demo accounts (`*@rcms.test`) **not** present (never run `db:seed` on production)
+- [ ] `RCMS_*_PASSWORD` variables set (marked Sensitive); build log shows `[provision] … created/unchanged` for admin, hq, centre, analyst; demo data **not** present (never run `db:seed` on production)
 - [ ] National workbook imported; dashboard totals match the source (64,849 / 2,431 / 75 for V1)
 - [ ] Branch protection on `main` with `CI passed`
 - [ ] Vercel Deployment Protection enabled for Previews (they can show real data if pointed at it)

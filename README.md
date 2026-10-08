@@ -27,7 +27,7 @@ npm run db:seed         # synthetic demo data in ./.data/pglite (embedded Postgr
 npm run dev             # http://localhost:3000
 ```
 
-Demo logins (password `Demo-Passw0rd-2026`): `admin@rcms.test`, `hq@rcms.test`, `centre@rcms.test`, `analyst@rcms.test`.
+Demo logins (password `Demo-Passw0rd-2026`): **`admin`**, **`hq`**, **`centre`**, **`analyst`** – plain usernames; emails also work as login ids.
 
 Prefer a real Postgres? `docker compose up -d` then
 `DATABASE_URL=postgres://rcms:rcms@localhost:5432/rcms npm run db:migrate && npm run db:seed`.
@@ -57,7 +57,7 @@ npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx             #
 
 ## Deploying
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), add `AUTH_SECRET`, deploy.
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** – connect the repo in Vercel, add the Neon database from Vercel → Storage (it injects `DATABASE_URL`), add `AUTH_SECRET` and the `RCMS_*_PASSWORD` account variables, deploy.
 Every push to a branch gets a Preview; every merge to `main` goes to Production, gated by CI.
 
 ## Documentation

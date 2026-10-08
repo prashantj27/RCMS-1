@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "tsx scripts/migrate.ts --vercel && next build",
+    "vercel-build": "tsx scripts/migrate.ts --vercel && tsx scripts/provision-users.ts --vercel && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -24,7 +24,8 @@
     "db:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
     "import:athletes": "tsx scripts/import-athletes.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:provision-users": "tsx scripts/provision-users.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

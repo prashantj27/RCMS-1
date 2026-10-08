@@ -5,7 +5,7 @@ const PASSWORD = "Demo-Passw0rd-2026";
 
 async function login(page: Page, email: string, password = PASSWORD) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Username or email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
@@ -24,15 +24,15 @@ test.describe("authentication", () => {
   });
 
   test("wrong password shows a generic error; correct password reaches the dashboard", async ({ page }) => {
-    await login(page, "admin@rcms.test", "definitely-wrong-password");
+    await login(page, "admin", "definitely-wrong-password");
     await expect(page.getByText("Invalid email or password")).toBeVisible();
-    await loginOk(page, "admin@rcms.test");
+    await loginOk(page, "admin");
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("Athletes", { exact: true }).first()).toBeVisible();
   });
 
   test("sign out ends the session", async ({ page }) => {
-    await loginOk(page, "admin@rcms.test");
+    await loginOk(page, "admin");
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/login$/);
     await page.goto("/athletes");
@@ -52,7 +52,7 @@ test.describe("authentication", () => {
   });
 
   test("cross-origin mutations are rejected", async ({ page }) => {
-    await loginOk(page, "admin@rcms.test");
+    await loginOk(page, "admin");
     await expect(page).toHaveURL("/");
     const res = await page.request.patch("/api/athletes/100001", { data: { shoeSize: 7 }, headers: { Origin: "https://evil.example" } });
     expect(res.status()).toBe(403);
@@ -61,7 +61,7 @@ test.describe("authentication", () => {
 
 test.describe("admin workflows", () => {
   test.beforeEach(async ({ page }) => {
-    await loginOk(page, "admin@rcms.test");
+    await loginOk(page, "admin");
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   });
 
@@ -140,9 +140,9 @@ test.describe("admin workflows", () => {
 
   test("admin can create a user who can then sign in", async ({ page, browser }) => {
     await page.goto("/admin/users");
-    const email = `e2e-${Date.now()}@rcms.test`;
-    await page.getByLabel("Name").fill("E2E Analyst");
-    await page.getByLabel("Email").fill(email);
+    const email = `e2e-${Date.now()}`; // plain usernames are valid logins
+    await page.getByLabel("Name", { exact: true }).fill("E2E Analyst");
+    await page.getByLabel("Username or email").fill(email);
     await page.getByLabel("Initial password (min 12 characters)").fill("Sturdy-Pass-Phrase-42");
     await page.getByRole("button", { name: "Create user" }).click();
     await expect(page.getByText("User created")).toBeVisible();
@@ -156,7 +156,7 @@ test.describe("admin workflows", () => {
 
 test.describe("role boundaries", () => {
   test("centre user sees only their centres and is kept out of admin areas", async ({ page }) => {
-    await loginOk(page, "centre@rcms.test");
+    await loginOk(page, "centre");
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("Figures for your assigned centres.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
@@ -169,7 +169,7 @@ test.describe("role boundaries", () => {
   });
 
   test("analyst has dashboards but no athlete-level pages", async ({ page }) => {
-    await loginOk(page, "analyst@rcms.test");
+    await loginOk(page, "analyst");
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Athletes", exact: true })).toHaveCount(0);
     await page.goto("/athletes");
@@ -177,7 +177,7 @@ test.describe("role boundaries", () => {
   });
 
   test("HQ officer can read personal details but not edit", async ({ page }) => {
-    await loginOk(page, "hq@rcms.test");
+    await loginOk(page, "hq");
     await page.goto("/athletes");
     await page.locator("table tbody tr a").first().click();
     await expect(page.getByText("Date of birth")).toBeVisible();

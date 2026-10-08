@@ -8,8 +8,18 @@ import type { Db } from "../db/client";
 import { academies, userAcademies, users } from "../db/schema";
 import { badRequest, conflict, notFound } from "../errors";
 
+/**
+ * Login id: a plain username ("admin", "hq") or an email address. Stored lower-cased in the `email` column
+ * (the column predates username logins; it holds whatever the person signs in with).
+ */
+export const loginIdSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9._@+-]{1,199}$/, "Use 2–200 letters, digits or . _ @ + - (starting with a letter or digit)");
+
 export const createUserSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
+  email: loginIdSchema,
   name: z.string().trim().min(1).max(120),
   role: z.enum(ROLES),
   password: z.string().min(1).max(128),
