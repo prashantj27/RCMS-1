@@ -285,27 +285,26 @@ export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string)
 /** Re-derives POSSIBLE_DUPLICATE for the whole registry (same name + DOB + father, different id). */
 export async function refreshPossibleDuplicates(db: Db, batchId: string | null): Promise<number> {
   await db.delete(dqIssues).where(eq(dqIssues.ruleCode, "POSSIBLE_DUPLICATE"));
-  const inserted = await rows<{ n: number | string }>(
+  await db.execute(sql`
+    with d as (
+      select array_agg(id order by id) as ids
+      from athletes
+      where search_name <> '' and dob is not null and coalesce(father_name, '') <> ''
+      group by search_name, dob, lower(father_name)
+      having count(*) > 1
+    )
+    insert into dq_issues (entity_type, entity_id, ref, rule_code, severity, message, detail, batch_id)
+    select 'athlete', x.id, '', 'POSSIBLE_DUPLICATE', 'warning',
+           'Same name, date of birth and father as athlete id ' || array_to_string(array_remove(d.ids, x.id), ', '),
+           jsonb_build_object('otherIds', to_jsonb(array_remove(d.ids, x.id))),
+           ${batchId}::uuid
+    from d cross join lateral unnest(d.ids) as x(id)
+    on conflict do nothing
+  `);
+  // Count what is stored rather than trusting a count taken inside the INSERT (not reliable on every driver).
+  const [stored] = await rows<{ n: number | string }>(
     db,
-    sql`
-      with d as (
-        select array_agg(id order by id) as ids
-        from athletes
-        where search_name <> '' and dob is not null and coalesce(father_name, '') <> ''
-        group by search_name, dob, lower(father_name)
-        having count(*) > 1
-      ), ins as (
-        insert into dq_issues (entity_type, entity_id, ref, rule_code, severity, message, detail, batch_id)
-        select 'athlete', x.id, '', 'POSSIBLE_DUPLICATE', 'warning',
-               'Same name, date of birth and father as athlete id ' || array_to_string(array_remove(d.ids, x.id), ', '),
-               jsonb_build_object('otherIds', to_jsonb(array_remove(d.ids, x.id))),
-               ${batchId}::uuid
-        from d cross join lateral unnest(d.ids) as x(id)
-        on conflict do nothing
-        returning 1
-      )
-      select count(*)::int as n from ins
-    `,
+    sql`select count(*)::int as n from dq_issues where rule_code = 'POSSIBLE_DUPLICATE'`,
   );
-  return Number(inserted[0]?.n ?? 0);
+  return Number(stored?.n ?? 0);
 }
