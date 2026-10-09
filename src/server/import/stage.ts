@@ -1,67 +1,59 @@
+import { createHash } from "node:crypto";
 import { asc, eq, lt, sql } from "drizzle-orm";
 import { z } from "zod";
-import { HeaderError, REQUIRED_COLUMNS, rowsFromMatrix } from "@/domain/athlete-master";
 import { audit } from "../auth/audit";
 import type { PortalUser } from "../auth/user";
 import type { Db } from "../db/client";
-import { importStageRows, importStages } from "../db/schema";
+import { importStageChunks, importStages } from "../db/schema";
 import { badRequest, conflict, notFound } from "../errors";
-import { MAX_ROWS } from "./parse-file";
+import { ImportFileError, matrixFromFile } from "./parse-file";
 import { runAthleteImport, type ImportReport } from "./run-import";
 
-export const MAX_CHUNK_ROWS = 5000;
+/** One request body is limited to 4.5 MB on Vercel; the browser sends ≤ 3 MB pieces. */
+export const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
+export const MAX_FILE_BYTES = 60 * 1024 * 1024;
 const STAGE_TTL_HOURS = 24;
-
-const cell = z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]);
 
 export const startStageSchema = z.object({
   fileName: z.string().trim().min(1).max(200),
   fileSha256: z.string().regex(/^[0-9a-f]{64}$/),
-  rowCount: z.number().int().min(1).max(MAX_ROWS),
-  header: z.array(z.string().max(100)).min(1).max(60),
+  fileBytes: z.number().int().min(1).max(MAX_FILE_BYTES),
 });
 
-export const chunkSchema = z.object({
-  seq: z.number().int().min(0).max(100_000),
-  rows: z.array(z.array(cell).max(60)).min(1).max(MAX_CHUNK_ROWS),
+export const finishSchema = z.object({
+  mode: z.enum(["dry_run", "apply"]),
+  /** Empty the registry first so it holds exactly this file. */
+  replace: z.boolean().optional().default(false),
 });
 
-export const finishSchema = z.object({ mode: z.enum(["dry_run", "apply"]) });
-
-/** Begins an upload. Fails fast when the header lacks required columns, before any row is sent. */
+/** Begins an upload of a workbook that will be sent in pieces. */
 export async function startStage(db: Db, user: PortalUser, input: z.infer<typeof startStageSchema>): Promise<{ stageId: string }> {
-  try {
-    rowsFromMatrix([input.header]);
-  } catch (e) {
-    if (e instanceof HeaderError) {
-      throw badRequest(
-        `${e.message}. Expected a sheet with columns: ${REQUIRED_COLUMNS.join(", ")} (…and the optional ones of the athlete master).`,
-      );
-    }
-    throw e;
-  }
-  // Housekeeping: abandoned uploads (rows cascade).
+  if (!/\.(xlsx|csv)$/i.test(input.fileName)) throw badRequest("Unsupported file type – choose a .xlsx or .csv file");
+  // Housekeeping: abandoned uploads (their pieces cascade).
   await db.delete(importStages).where(lt(importStages.createdAt, sql`now() - interval '${sql.raw(String(STAGE_TTL_HOURS))} hours'`));
   const [row] = await db
     .insert(importStages)
-    .values({ fileName: input.fileName, fileSha256: input.fileSha256, rowCount: input.rowCount, header: input.header, createdBy: user.id })
+    .values({ fileName: input.fileName, fileSha256: input.fileSha256, fileBytes: input.fileBytes, createdBy: user.id })
     .returning({ id: importStages.id });
   return { stageId: row!.id };
 }
 
-/** Stores one batch of rows. Idempotent per (stage, seq): re-sending a batch after a network error is safe. */
-export async function putChunk(db: Db, stageId: string, input: z.infer<typeof chunkSchema>): Promise<{ received: number }> {
+/** Stores one piece of the file. Idempotent per (stage, seq): re-sending a piece after a network error is safe. */
+export async function putChunk(db: Db, stageId: string, seq: number, data: Buffer): Promise<{ receivedBytes: number }> {
+  if (!Number.isInteger(seq) || seq < 0 || seq > 100_000) throw badRequest("Invalid piece number");
+  if (data.length === 0) throw badRequest("Empty piece");
+  if (data.length > MAX_CHUNK_BYTES) throw badRequest("Piece too large – send at most 4 MB at a time");
   const [stage] = await db.select({ id: importStages.id }).from(importStages).where(eq(importStages.id, stageId));
   if (!stage) throw notFound("Upload");
   await db
-    .insert(importStageRows)
-    .values({ stageId, seq: input.seq, rows: input.rows, rowCount: input.rows.length })
-    .onConflictDoUpdate({ target: [importStageRows.stageId, importStageRows.seq], set: { rows: input.rows, rowCount: input.rows.length } });
+    .insert(importStageChunks)
+    .values({ stageId, seq, data, size: data.length })
+    .onConflictDoUpdate({ target: [importStageChunks.stageId, importStageChunks.seq], set: { data, size: data.length } });
   const [t] = await db
-    .select({ n: sql<number>`coalesce(sum(${importStageRows.rowCount}), 0)::int` })
-    .from(importStageRows)
-    .where(eq(importStageRows.stageId, stageId));
-  return { received: Number(t?.n ?? 0) };
+    .select({ n: sql<number>`coalesce(sum(${importStageChunks.size}), 0)::int` })
+    .from(importStageChunks)
+    .where(eq(importStageChunks.stageId, stageId));
+  return { receivedBytes: Number(t?.n ?? 0) };
 }
 
 export async function discardStage(db: Db, stageId: string): Promise<void> {
@@ -69,43 +61,72 @@ export async function discardStage(db: Db, stageId: string): Promise<void> {
 }
 
 /**
- * Validates (dry run) or writes (apply) the uploaded rows. The upload must be complete and gap-free.
- * A dry run keeps the staged rows so "Import" can follow without uploading again; a successful apply removes them.
+ * Reads the uploaded file back, checks it is complete and unaltered (size and SHA-256 as announced by the browser),
+ * parses it on the server and validates (dry run) or writes (apply) it.
+ * A dry run keeps the upload so "Import" can follow without uploading again; a successful apply removes it.
  */
 export async function finishStage(
   db: Db,
   user: PortalUser,
   stageId: string,
-  mode: "dry_run" | "apply",
+  opts: z.infer<typeof finishSchema>,
   ip: string | null,
 ): Promise<ImportReport> {
   const [stage] = await db.select().from(importStages).where(eq(importStages.id, stageId));
   if (!stage) throw notFound("Upload (it may have expired – upload the file again)");
 
-  const chunks = await db
-    .select({ seq: importStageRows.seq, rows: importStageRows.rows, n: importStageRows.rowCount })
-    .from(importStageRows)
-    .where(eq(importStageRows.stageId, stageId))
-    .orderBy(asc(importStageRows.seq));
-  const received = chunks.reduce((s, c) => s + c.n, 0);
-  const contiguous = chunks.every((c, i) => c.seq === i);
-  if (!contiguous || received !== stage.rowCount) {
+  const pieces = await db
+    .select({ seq: importStageChunks.seq, data: importStageChunks.data, size: importStageChunks.size })
+    .from(importStageChunks)
+    .where(eq(importStageChunks.stageId, stageId))
+    .orderBy(asc(importStageChunks.seq));
+  const received = pieces.reduce((s, c) => s + c.size, 0);
+  if (!pieces.every((c, i) => c.seq === i) || received !== stage.fileBytes) {
     throw conflict(
-      `Upload incomplete: ${received.toLocaleString("en-IN")} of ${stage.rowCount.toLocaleString("en-IN")} rows received. Send the missing batches and try again.`,
+      `Upload incomplete: ${received.toLocaleString("en-IN")} of ${stage.fileBytes.toLocaleString("en-IN")} bytes received. Upload the file again.`,
     );
   }
+  const file = Buffer.concat(pieces.map((c) => c.data));
+  if (createHash("sha256").update(file).digest("hex") !== stage.fileSha256) {
+    throw conflict("The uploaded file was damaged in transit (checksum mismatch). Upload it again.");
+  }
 
-  const matrix: unknown[][] = [stage.header, ...chunks.flatMap((c) => c.rows)];
-  const report = await runAthleteImport(db, { matrix, fileName: stage.fileName, fileSha256: stage.fileSha256, mode, createdBy: user.id });
+  let matrix: unknown[][];
+  try {
+    matrix = await matrixFromFile(file, stage.fileName);
+  } catch (e) {
+    if (e instanceof ImportFileError) throw badRequest(e.message);
+    throw e;
+  }
+  let report: ImportReport;
+  try {
+    report = await runAthleteImport(db, {
+      matrix,
+      fileName: stage.fileName,
+      fileSha256: stage.fileSha256,
+      mode: opts.mode,
+      replace: opts.replace,
+      createdBy: user.id,
+    });
+  } catch (e) {
+    // e.g. a sheet without the required columns: a problem with the file, reported before anything is changed
+    if (e instanceof ImportFileError) throw badRequest(`${e.message}. Expected the athlete master workbook (see Data imports).`);
+    throw e;
+  }
   await audit(db, {
     actorId: user.id,
     actorEmail: user.email,
-    action: mode === "apply" ? "import_apply" : "import_dry_run",
+    action: opts.mode === "apply" ? (opts.replace ? "import_replace" : "import_apply") : "import_dry_run",
     entityType: "import_batch",
     entityId: report.batchId,
-    detail: { fileName: stage.fileName, athletes: report.stats.athletes, rejected: report.stats.rowsRejected },
+    detail: {
+      fileName: stage.fileName,
+      athletes: report.stats.athletes,
+      rejected: report.stats.rowsRejected,
+      ...(report.replacing ? { replaced: report.replacing } : {}),
+    },
     ip,
   });
-  if (mode === "apply") await discardStage(db, stageId);
+  if (opts.mode === "apply") await discardStage(db, stageId);
   return report;
 }

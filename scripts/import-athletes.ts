@@ -6,6 +6,7 @@
  *
  * Options
  *   --dry-run        parse + validate + diff against the database, write nothing
+ *   --replace        empty the registry first so it holds exactly this file (one transaction; rolls back on failure)
  *   --as-of YYYY-MM-DD   reference date for "future"/age rules (default: today)
  *
  * Uses DATABASE_URL_UNPOOLED / DATABASE_URL (or the local PGlite dev database when neither is set).
@@ -29,7 +30,7 @@ async function main() {
   const asOfArg = arg("--as-of");
   const file = process.argv.slice(2).find((a) => !a.startsWith("--") && a !== asOfArg);
   if (!file) {
-    console.error("Usage: npm run import:athletes -- <file.xlsx|file.csv> [--dry-run] [--as-of YYYY-MM-DD]");
+    console.error("Usage: npm run import:athletes -- <file.xlsx|file.csv> [--dry-run] [--replace] [--as-of YYYY-MM-DD]");
     process.exit(2);
   }
   const dryRun = process.argv.includes("--dry-run");
@@ -55,12 +56,18 @@ async function main() {
     fileName: path.basename(file),
     fileSha256: sha256(buf),
     mode: dryRun ? "dry_run" : "apply",
+    replace: process.argv.includes("--replace"),
     createdBy,
     ...(asOf ? { asOf } : {}),
   });
 
   const s = report.stats;
   console.log(`\n${dryRun ? "DRY RUN – nothing written" : "APPLIED"}  (batch ${report.batchId})`);
+  if (report.replacing) {
+    console.log(
+      `${dryRun ? "Would replace" : "Replaced"} the registry: ${report.replacing.athletes} athletes, ${report.replacing.centres} centres, ${report.replacing.enrollments} enrolments`,
+    );
+  }
   console.table({
     "rows read": s.rowsRead,
     "rows rejected": s.rowsRejected,

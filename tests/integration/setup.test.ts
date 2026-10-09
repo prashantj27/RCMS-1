@@ -37,7 +37,7 @@ describe("database problem classification (shown to the operator, never contains
   it("treats a database built by an older release (newest tables missing) as not migrated", async () => {
     const h = await testDb();
     try {
-      await h.db.execute(sql`drop table import_stage_rows, import_stages`);
+      await h.db.execute(sql`drop table import_stage_chunks, import_stages`);
       expect(await getSetupChecks(h.db)).toMatchObject({ database: true, migrations: false });
     } finally {
       await h.close();

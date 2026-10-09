@@ -1,8 +1,8 @@
 # RCMS – Regional Centre Monitoring System
 
 Athlete registry, data-quality control and kit & shoe planning for Khelo India / SAI centres.
-Built from the national athlete master workbook (`RC_monitoring_Athlete_Details_V1.xlsx`: 65,508 rows →
-**64,849 athletes · 2,431 centres · 75 sports · 65,418 enrolments**).
+Built from the national athlete master workbook (final version `RC_monitoring_Athlete_Details_CLEANED_Unique.xlsx`: one row per athlete →
+**64,849 athletes · 2,410 centres · 75 sports · 64,822 enrolments**).
 
 **Stack:** Next.js 16 (App Router) · TypeScript · PostgreSQL (Drizzle ORM) · Tailwind CSS 4 · Vitest · Playwright · GitHub Actions · Vercel.
 
@@ -35,7 +35,7 @@ Every page has a **Home** button (and a banner) to go back and switch user type.
 > Use synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN before loading real data.
 > Date of birth and parents' names are hidden by default (`RCMS_PROTOTYPE_SHOW_PII=1` shows them).
 
-**Real data only.** The deployed app has no demo data. The athlete master workbook (`RC_monitoring_Athlete_Details_V1.xlsx`) is loaded once from
+**Real data only.** The deployed app has no demo data. The athlete master workbook (final version: `RC_monitoring_Athlete_Details_CLEANED_Unique.xlsx`, one row per athlete: 64,849 athletes · 2,410 centres · 75 sports · 64,822 enrolments) is loaded once from
 _Administrator → Data imports_ and is stored in the Postgres/Neon database; every portal reads it from there, it survives redeploys, and re-importing the
 same file changes nothing. The Data imports page shows the current data and which workbook it came from.
 

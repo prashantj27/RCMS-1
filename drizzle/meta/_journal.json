@@ -22,6 +22,20 @@
       "when": 1791466943928,
       "tag": "0002_import_staging",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791543136232,
+      "tag": "0003_import_staging_drop_rows",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791543144616,
+      "tag": "0004_import_staging_file_chunks",
+      "breakpoints": true
     }
   ]
 }

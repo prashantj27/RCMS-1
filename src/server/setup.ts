@@ -31,7 +31,7 @@ export async function getSetupChecks(db: Db): Promise<SetupChecks> {
   // Every table the running app needs; a database set up by an older build lacks the newest ones.
   const [t] = await rows<{ ok: boolean }>(
     db,
-    sql`select (to_regclass('public.athletes') is not null and to_regclass('public.import_stages') is not null) as ok`,
+    sql`select (to_regclass('public.athletes') is not null and to_regclass('public.import_stage_chunks') is not null) as ok`,
   );
   checks.migrations = Boolean(t?.ok);
   if (checks.migrations) {

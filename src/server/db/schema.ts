@@ -17,7 +17,15 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  customType,
 } from "drizzle-orm/pg-core";
+
+/** bytea as a Buffer, whichever driver is in use (postgres-js and PGlite both take Uint8Array parameters; reads may come back as hex text). */
+const bytea = customType<{ data: Buffer; driverData: Uint8Array | string }>({
+  dataType: () => "bytea",
+  toDriver: (v) => v,
+  fromDriver: (v) => (typeof v === "string" ? Buffer.from(v.replace(/^\\x/, ""), "hex") : Buffer.from(v)),
+});
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
@@ -164,29 +172,28 @@ export const importBatches = pgTable(
 );
 
 /**
- * A workbook being uploaded in small batches (the browser parses the file and sends rows, because a single
- * serverless request is limited to 4.5 MB). Removed after a successful import or after 24 hours.
+ * A workbook being uploaded in small pieces (a single serverless request is limited to 4.5 MB).
+ * Removed after a successful import or after 24 hours.
  */
 export const importStages = pgTable("import_stages", {
   id: uuid("id").primaryKey().defaultRandom(),
   fileName: text("file_name").notNull(),
   fileSha256: text("file_sha256").notNull(),
-  /** Rows the browser says it will send (header excluded). */
-  rowCount: integer("row_count").notNull(),
-  header: jsonb("header").$type<string[]>().notNull(),
+  /** Size the browser says it will send; checked on finish. */
+  fileBytes: integer("file_bytes").notNull().default(0),
   createdBy: uuid("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const importStageRows = pgTable(
-  "import_stage_rows",
+export const importStageChunks = pgTable(
+  "import_stage_chunks",
   {
     stageId: uuid("stage_id")
       .notNull()
       .references(() => importStages.id, { onDelete: "cascade" }),
     seq: integer("seq").notNull(),
-    rows: jsonb("rows").$type<unknown[][]>().notNull(),
-    rowCount: integer("row_count").notNull(),
+    data: bytea("data").notNull(),
+    size: integer("size").notNull(),
   },
   (t) => [primaryKey({ columns: [t.stageId, t.seq] })],
 );

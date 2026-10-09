@@ -6,7 +6,7 @@
 Browser ──► Next.js (Vercel, region bom1)
               ├─ Server Components  → services → Drizzle → Postgres
               ├─ Route Handlers /api/*  (same services; JSON)
-              └─ Client islands: kit editor, workbook import (reads the file in the browser, uploads in batches)
+              └─ Client islands: kit editor, workbook import (uploads the file in 3 MB pieces)
 ```
 
 One deployable. No separate API service, queue or cache: at 65 k athletes every dashboard query runs in 100–300 ms
@@ -55,7 +55,7 @@ drizzle/      SQL migrations (generated, committed)
 - **CSRF:** all mutations require same-origin (`Origin` / `Sec-Fetch-Site`).
 - **Injection:** all SQL is parameterised; LIKE wildcards in search are escaped; CSV export neutralises spreadsheet formulas.
 - **Headers:** CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, strict referrer and permissions policies; API responses `no-store`. `robots: noindex`.
-- **Uploads:** the browser parses the workbook and sends JSON batches (≤ 5,000 rows, zod-validated cell types and lengths); rows are staged in `import_stages` / `import_stage_rows` and only applied if the count is complete and contiguous. The CLI importer still content-sniffs files (ZIP magic) and caps rows. Only `/imports` has a CSP `worker-src blob:` (the unzip library needs it for big files).
+- **Uploads:** the browser fingerprints the workbook (SHA-256) and sends it untouched in ≤ 3 MB pieces (`POST /api/imports/stage/<id>?seq=n`, ≤ 4 MB enforced). The pieces are stored in `import_stage_chunks`; on finish the server checks the piece sequence, total size and checksum, then reads the workbook itself (sheet `AthleteMaster`, else the first sheet; content-sniffed, row-capped) and runs the import. Nothing is parsed in the browser, so no web worker or CSP exception is needed. Temporary uploads vanish after a successful import or after 24 h.
 - **Audit:** kit edits (before → after) and imports.
 
 ## Performance (65 k athletes, real data, Postgres 16)

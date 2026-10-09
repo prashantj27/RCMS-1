@@ -18,6 +18,35 @@ function* chunks<T>(list: readonly T[], size: number): Generator<T[]> {
   for (let i = 0; i < list.length; i += size) yield list.slice(i, i + size) as T[];
 }
 
+export interface RegistryCounts {
+  athletes: number;
+  centres: number;
+  enrollments: number;
+}
+
+export async function registryCounts(db: Db): Promise<RegistryCounts> {
+  const [r] = await rows<{ a: number | string; c: number | string; e: number | string }>(
+    db,
+    sql`select (select count(*) from athletes)::int as a, (select count(*) from academies)::int as c, (select count(*) from enrollments)::int as e`,
+  );
+  return { athletes: Number(r?.a ?? 0), centres: Number(r?.c ?? 0), enrollments: Number(r?.e ?? 0) };
+}
+
+/** The diff of a plan against an EMPTY registry – what "replace everything" amounts to. */
+export function diffAgainstEmpty(plan: ImportPlan): DbDiff {
+  return {
+    athletesNew: plan.athletes.length,
+    athletesExisting: 0,
+    academiesNew: plan.academies.length,
+    academiesExisting: 0,
+    enrollmentsNew: plan.enrollments.length,
+    enrollmentsExisting: 0,
+    athletesProtectedByManualEdit: 0,
+    kitConflictIds: [],
+    kitIdConflicts: [],
+  };
+}
+
 export interface DbDiff {
   athletesNew: number;
   athletesExisting: number;
@@ -123,9 +152,20 @@ export interface ApplyResult {
  *  - upsert only (nothing is ever deleted);
  *  - a blank value in the file never erases a known value in the database;
  *  - kit data of athletes edited in the app (edited_at) is preserved.
+ * With `replace: true` the registry tables are emptied first, in the same transaction, so afterwards the registry holds
+ * exactly the file. That is the only way to retire records the file no longer contains (a previous or demo load).
+ * Import history and the audit log are kept; if anything fails the transaction rolls back and nothing changes.
  */
-export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string): Promise<ApplyResult> {
+export async function applyImportPlan(db: Db, plan: ImportPlan, batchId: string, opts: { replace?: boolean } = {}): Promise<ApplyResult> {
   return db.transaction(async (tx) => {
+    if (opts.replace) {
+      await tx.delete(dqIssues);
+      await tx.delete(enrollments);
+      await tx.delete(athletes);
+      await tx.delete(academies);
+      await tx.delete(sports);
+      await tx.delete(centreTypes);
+    }
     // — centre types —
     for (const group of chunks(plan.centreTypes, SMALL_CHUNK)) {
       await tx

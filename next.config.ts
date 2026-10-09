@@ -17,9 +17,6 @@ const cspDirectives = [
   "upgrade-insecure-requests",
 ];
 const csp = cspDirectives.join("; ");
-// The workbook import unzips the .xlsx in the browser; for big files the unzip library spawns a blob: Web Worker.
-// Allow exactly that, and only on the imports page (everything else keeps worker-src → script-src → 'self').
-const importsCsp = [...cspDirectives, "worker-src 'self' blob:"].join("; ");
 
 const baseHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -42,10 +39,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "postgres", "read-excel-file"],
   async headers() {
     return [
-      // Exactly one CSP header per response: the imports page gets the variant with worker-src, all others the strict one.
-      { source: "/:path((?!imports(?:/|$)).*)", headers: [...baseHeaders, ...hsts, ...cspHeader(csp)] },
-      { source: "/imports", headers: [...baseHeaders, ...hsts, ...cspHeader(importsCsp)] },
-      { source: "/imports/:rest+", headers: [...baseHeaders, ...hsts, ...cspHeader(csp)] },
+      { source: "/:path*", headers: [...baseHeaders, ...hsts, ...cspHeader(csp)] },
       // API responses must never be cached by shared caches (they contain athlete data).
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];

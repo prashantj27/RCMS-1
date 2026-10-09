@@ -35,7 +35,7 @@ export default async function ImportsPage() {
                 {fmtDateTime(current.source.loadedAt)} IST
               </>
             ) : null}
-            . Stored in the database; imports only add or update.
+            . Stored in the database and kept across redeploys.
           </Notice>
         )}
       </div>
@@ -50,12 +50,16 @@ export default async function ImportsPage() {
                 Always run a <strong>dry run</strong> first: it shows what would change and what the checks found.
               </li>
               <li>
-                Imports only <strong>add or update</strong>; nothing is deleted. A blank cell never erases a known value.
+                Without “replace”, imports only <strong>add or update</strong>; nothing is removed. A blank cell never erases a known value.
               </li>
               <li>Invalid values (impossible dates, size 0, plain-text phone numbers) are not stored and are listed under Data quality.</li>
               <li>Kit data edited in RCMS is kept when the workbook is re-imported.</li>
               <li>
-                The national master (~10 MB) is read in your browser and uploaded in small batches, so it works on Vercel. Keep the tab open
+                <strong>Replace all existing data</strong> (ticked by default) empties the registry and loads exactly this file, in one
+                step: if anything fails nothing changes. Untick it to only add and update.
+              </li>
+              <li>
+                The national master (~10 MB) is uploaded in small pieces and read on the server, so it works on Vercel. Keep the tab open
                 until it finishes. A terminal import is also available: <code>npm run import:athletes -- ./file.xlsx</code>
               </li>
             </ul>

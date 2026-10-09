@@ -68,16 +68,15 @@ test.describe("Administrator portal", () => {
     await page.setInputFiles("#import-file", path.join(__dirname, "..", "fixtures", "synthetic-athletes.xlsx"));
     await page.getByRole("button", { name: "Validate (dry run)" }).click();
     await expect(page.getByText(/Dry run complete – nothing was written/)).toBeVisible();
+    await expect(page.getByText(/Would replace the current registry/)).toBeVisible(); // "replace all" is ticked by default
   });
 });
 
 test.describe("security headers", () => {
-  test("one CSP per page; only /imports may start the blob: worker the in-browser workbook reader needs", async ({ request }) => {
-    await request.get("/enter/admin"); // /imports redirects home without a chosen portal
-    const csp = async (url: string) => (await request.get(url)).headers()["content-security-policy"] ?? "";
-    expect(await csp("/imports")).toContain("worker-src 'self' blob:");
-    for (const url of ["/", "/imports/anything", "/api/health", "/choose-centre"]) {
-      const value = await csp(url);
+  test("every page carries the same strict CSP (no worker or blob exceptions)", async ({ request }) => {
+    await request.get("/enter/admin");
+    for (const url of ["/", "/imports", "/imports/anything", "/api/health", "/choose-centre"]) {
+      const value = (await request.get(url)).headers()["content-security-policy"] ?? "";
       expect(value, url).toContain("default-src 'self'");
       expect(value, url).not.toContain("worker-src");
     }

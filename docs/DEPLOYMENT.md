@@ -33,12 +33,14 @@ button opens that portal with that role's permissions. The only required configu
    **Database variables only reach deployments built after they were added**, and the tables are created during the build; if the database was
    connected after the first deploy, either redeploy or open _Administrator → Set up database_ (applies the migrations at runtime, idempotent). `"data":false` just means no data yet.
    `"version"` is the first 7 characters of the deployed commit. The first page must show **four user-type buttons** and no password field.
-5. **Load the workbook into Neon (from the browser, no CLI needed).** Home → **Administrator** → **Data imports** → choose
-   `RC_monitoring_Athlete_Details_V1.xlsx` → **Validate (dry run)** to preview → **Import**. Keep the tab open (≈ 1 minute for 65 k rows).
-   The browser reads the workbook, uploads it in 1,000-row batches (Vercel limits a request body to 4.5 MB), and the server stages the rows
-   in Postgres, then runs the import in one transaction. Re-importing the same file changes nothing (idempotent); a failed or abandoned upload
-   leaves the registry untouched and is cleaned up automatically after 24 h.
-   Expected totals for V1: **64,849 athletes · 2,431 centres · 75 sports** on the Dashboard.
+5. **Load the workbook into Neon (from the browser, no CLI needed).** Home → **Administrator** → **Data imports** → choose the workbook
+   (`RC_monitoring_Athlete_Details_CLEANED_Unique.xlsx` is the final one) → **Validate (dry run)** to preview → **Import**. Keep the tab open
+   (≈ 30 seconds). The browser sends the file in 3 MB pieces (Vercel limits a request body to 4.5 MB); the server stores the pieces,
+   verifies size and checksum, reads the workbook and writes it in one transaction. **"Replace all existing data" is ticked by default**: the
+   registry is emptied and loaded with exactly this file, so earlier loads (such as demo data) cannot linger. Untick it to only add and update.
+   If anything fails the transaction rolls back and the registry is unchanged. Re-importing the same file changes nothing.
+   Expected totals for `CLEANED_Unique`: **64,849 athletes · 2,410 centres · 75 sports · 64,822 enrolments** (one centre per athlete; 27 athletes
+   have no centre in the file).
 6. **The data stays.** It lives in the Neon database, not in the deployment: redeploys, rollbacks and new Preview builds never touch it. The only things that
    change it are workbook imports (add/update, never delete) and kit edits. The Data imports page shows the current data and its source file.
 
@@ -114,7 +116,7 @@ PR ──review + "CI passed" required──► merge to dev ──► Vercel Pr
 - [ ] Neon integration connected to Production + Preview (`DATABASE_URL` pooled and `DATABASE_URL_UNPOOLED` present); region India/Singapore
 - [ ] **Vercel Deployment Protection enabled (Production and Previews) before the real workbook is imported**
 - [ ] `RCMS_PROTOTYPE_SHOW_PII` unset (DOB / parents hidden) unless the deployment is protected and the need is documented
-- [ ] Workbook imported from the Administrator portal; Dashboard totals match the source (64,849 / 2,431 / 75 for V1); Data imports history shows the run
+- [ ] Workbook imported from the Administrator portal with "Replace all existing data"; Dashboard totals match the source (64,849 / 2,410 / 75 for CLEANED_Unique); Data imports → Current data names the file
 - [ ] No synthetic data in this database (the app has no demo loader; `db:seed` refuses a database that holds athletes)
 - [ ] Branch protection on `dev` with `CI passed`
 - [ ] Neon backup retention confirmed (≥ 7 days); data-protection owner informed that the system holds minors' PII
