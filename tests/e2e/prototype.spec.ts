@@ -64,6 +64,7 @@ test.describe("Administrator portal", () => {
     await expect(page.getByLabel("Shoe")).toHaveValue("8");
 
     await page.goto("/imports");
+    await expect(page.getByTestId("current-dataset")).toContainText("Current data");
     await page.setInputFiles("#import-file", path.join(__dirname, "..", "fixtures", "synthetic-athletes.xlsx"));
     await page.getByRole("button", { name: "Validate (dry run)" }).click();
     await expect(page.getByText(/Dry run complete – nothing was written/)).toBeVisible();
@@ -96,15 +97,12 @@ test.describe("database setup", () => {
   });
 });
 
-test.describe("demo data loader", () => {
-  test("is refused once the registry has athletes (never mixes with real data) and for non-admin portals", async ({ page }) => {
+test.describe("no demo data path", () => {
+  test("there is no endpoint that loads demo data; the registry only changes through workbook imports", async ({ page }) => {
     await open(page, "admin");
-    const res = await page.request.post("/api/demo-data");
-    expect(res.status()).toBe(409);
-    await page.goto("/enter/hq");
-    expect((await page.request.post("/api/demo-data")).status()).toBe(403);
+    expect((await page.request.post("/api/demo-data")).status()).toBe(404);
     await page.goto("/dashboard");
-    await expect(page.getByRole("button", { name: "Load synthetic demo data" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /demo/i })).toHaveCount(0);
   });
 });
 

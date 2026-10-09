@@ -23,7 +23,7 @@ Built from the national athlete master workbook (`RC_monitoring_Athlete_Details_
 ```bash
 nvm use                 # Node 22
 npm ci
-npm run db:seed         # synthetic demo data in ./.data/pglite (embedded Postgres)
+npm run db:seed         # OPTIONAL: fictional data for local development only (refuses a database that holds athletes)
 npm run dev             # http://localhost:3000
 ```
 
@@ -35,7 +35,9 @@ Every page has a **Home** button (and a banner) to go back and switch user type.
 > Use synthetic data, or put the whole site behind Vercel Deployment Protection / a VPN before loading real data.
 > Date of birth and parents' names are hidden by default (`RCMS_PROTOTYPE_SHOW_PII=1` shows them).
 
-**Deployed on Vercel?** A fresh database is empty: open the _Administrator_ portal and press **Load synthetic demo data** (only offered while the registry is empty).
+**Real data only.** The deployed app has no demo data. The athlete master workbook (`RC_monitoring_Athlete_Details_V1.xlsx`) is loaded once from
+_Administrator → Data imports_ and is stored in the Postgres/Neon database; every portal reads it from there, it survives redeploys, and re-importing the
+same file changes nothing. The Data imports page shows the current data and which workbook it came from.
 
 Prefer a real Postgres? `docker compose up -d` then
 `DATABASE_URL=postgres://rcms:rcms@localhost:5432/rcms npm run db:migrate && npm run db:seed`.
@@ -48,7 +50,7 @@ npm run import:athletes -- ./RC_monitoring_Athlete_Details_V1.xlsx             #
 ```
 
 > ⚠️ The workbook contains personal data of **minors** (names, parents, DOB, encrypted phone numbers).
-> `*.xlsx` is git-ignored – never commit it or paste it into tickets. Tests and demos use **synthetic** data only.
+> `*.xlsx` is git-ignored – never commit it or paste it into tickets. Automated tests use **synthetic** data only.
 
 ## Commands
 

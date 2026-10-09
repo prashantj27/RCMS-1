@@ -6,8 +6,6 @@ import { fmt, pct } from "@/lib/format";
 import { getPortalUser } from "@/server/auth/current-user";
 import { getDb } from "@/server/db/client";
 import { getOverview } from "@/server/services/analytics";
-import { getDemoStatus } from "@/server/services/demo";
-import { LoadDemoButton } from "./load-demo-button";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -22,32 +20,28 @@ export default async function DashboardPage() {
   const canDrill = user.caps.has("athletes:read");
 
   if (t.athletes === 0) {
-    const demo = await getDemoStatus(db, user);
     return (
       <>
         <PageHeader title="Dashboard" />
         <Card title="No athletes in the registry yet">
-          {demo.canLoad ? (
-            <>
-              <p className="text-sm text-slate-700">
-                This is a fresh prototype with an empty database. Load fictional, synthetic data (about 1,200 athletes in 30 centres) to
-                explore every portal. You can also load the real workbook from the command line (see the README) – but only load real
-                athlete data if the site is access-protected.
-              </p>
-              <LoadDemoButton />
-            </>
-          ) : user.scope.academyIds !== null ? (
+          {user.scope.academyIds !== null ? (
             <p className="text-sm text-slate-700">No athletes are enrolled in this centre.</p>
-          ) : demo.athletes === 0 ? (
+          ) : user.caps.has("imports:run") ? (
             <p className="text-sm text-slate-700">
-              The registry is empty. Use{" "}
-              <Link href="/" className="text-brand-700 underline">
-                Home
-              </Link>{" "}
-              to open the <strong>Administrator</strong> portal, which can load demo data.
+              The registry is empty. Load the athlete master workbook (<code>RC_monitoring_Athlete_Details_V1.xlsx</code>) from{" "}
+              <Link href="/imports" className="text-brand-700 underline">
+                Data imports
+              </Link>
+              . It is stored in the database and stays there; every portal reads it from there.
             </p>
           ) : (
-            <p className="text-sm text-slate-700">The registry is empty. Load the athlete workbook (see the README).</p>
+            <p className="text-sm text-slate-700">
+              The registry is empty. Open the{" "}
+              <Link href="/" className="text-brand-700 underline">
+                Administrator portal
+              </Link>{" "}
+              and load the athlete master workbook.
+            </p>
           )}
         </Card>
       </>

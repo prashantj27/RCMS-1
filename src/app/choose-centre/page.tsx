@@ -87,7 +87,7 @@ export default async function ChooseCentrePage({ searchParams }: { searchParams:
                   <Link href="/" className="underline">
                     Home
                   </Link>{" "}
-                  and open the Administrator portal to load demo data.
+                  and open the Administrator portal to load the athlete workbook (Data imports).
                 </>
               ) : (
                 "Try a different search."

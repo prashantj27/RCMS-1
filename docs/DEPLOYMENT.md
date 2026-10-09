@@ -39,7 +39,8 @@ button opens that portal with that role's permissions. The only required configu
    in Postgres, then runs the import in one transaction. Re-importing the same file changes nothing (idempotent); a failed or abandoned upload
    leaves the registry untouched and is cleaned up automatically after 24 h.
    Expected totals for V1: **64,849 athletes · 2,431 centres · 75 sports** on the Dashboard.
-6. **No data yet and just want to look around?** Administrator → _Load synthetic demo data_ (only offered while the registry is empty).
+6. **The data stays.** It lives in the Neon database, not in the deployment: redeploys, rollbacks and new Preview builds never touch it. The only things that
+   change it are workbook imports (add/update, never delete) and kit edits. The Data imports page shows the current data and its source file.
 
 ### Alternative: import from a terminal
 
@@ -114,7 +115,7 @@ PR ──review + "CI passed" required──► merge to dev ──► Vercel Pr
 - [ ] **Vercel Deployment Protection enabled (Production and Previews) before the real workbook is imported**
 - [ ] `RCMS_PROTOTYPE_SHOW_PII` unset (DOB / parents hidden) unless the deployment is protected and the need is documented
 - [ ] Workbook imported from the Administrator portal; Dashboard totals match the source (64,849 / 2,431 / 75 for V1); Data imports history shows the run
-- [ ] Demo data **not** present in a real-data database (the loader refuses a non-empty registry)
+- [ ] No synthetic data in this database (the app has no demo loader; `db:seed` refuses a database that holds athletes)
 - [ ] Branch protection on `dev` with `CI passed`
 - [ ] Neon backup retention confirmed (≥ 7 days); data-protection owner informed that the system holds minors' PII
 - [ ] Custom domain + HTTPS (HSTS is already sent)

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Badge, Card, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Badge, Card, EmptyState, Notice, PageHeader, Table, Td, Th } from "@/components/ui";
 import { fmt, fmtDateTime } from "@/lib/format";
 import { requireUser } from "@/server/auth/current-user";
 import { getDb } from "@/server/db/client";
-import { listImportBatches } from "@/server/services/imports";
+import { getCurrentDataset, listImportBatches } from "@/server/services/imports";
 import { ImportForm } from "./import-form";
 
 export const metadata: Metadata = { title: "Data imports" };
@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ImportsPage() {
   const user = await requireUser("imports:read");
-  const batches = await listImportBatches(await getDb());
+  const db = await getDb();
+  const [batches, current] = await Promise.all([listImportBatches(db), getCurrentDataset(db)]);
   const canRun = user.caps.has("imports:run");
 
   return (
@@ -20,6 +21,24 @@ export default async function ImportsPage() {
         title="Data imports"
         description="Load or refresh the athlete master from the RC monitoring workbook. Every run is recorded below."
       />
+      <div className="mb-4" data-testid="current-dataset">
+        {current.athletes === 0 ? (
+          <Notice tone="warning">
+            The registry is empty. Load the athlete master workbook below – it is stored in the database and stays there.
+          </Notice>
+        ) : (
+          <Notice tone="ok">
+            <strong>Current data:</strong> {fmt(current.athletes)} athletes in {fmt(current.centres)} centres
+            {current.source ? (
+              <>
+                , loaded from <span title={`sha256 ${current.source.fileSha256}`}>{current.source.fileName}</span> on{" "}
+                {fmtDateTime(current.source.loadedAt)} IST
+              </>
+            ) : null}
+            . Stored in the database; imports only add or update.
+          </Notice>
+        )}
+      </div>
       {canRun ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Upload a workbook" className="lg:col-span-2">

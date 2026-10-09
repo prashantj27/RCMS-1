@@ -1,7 +1,8 @@
-import { desc } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { PROTOTYPE_USER_IDS, portalByRole } from "@/domain/prototype";
 import { importBatches } from "../db/schema";
+import { num, one } from "../db/util";
 
 export interface ImportBatchView {
   id: string;
@@ -51,4 +52,33 @@ export async function listImportBatches(db: Db, limit = 25): Promise<ImportBatch
     error: x.error,
     summary: x.summary,
   }));
+}
+
+export interface CurrentDataset {
+  athletes: number;
+  centres: number;
+  /** The most recent import that was applied (not a dry run); null when the registry has never been loaded. */
+  source: { fileName: string; fileSha256: string; loadedAt: string } | null;
+}
+
+/** What the portals are showing right now, and which workbook it came from. */
+export async function getCurrentDataset(db: Db): Promise<CurrentDataset> {
+  const [counts, last] = await Promise.all([
+    one<{ athletes: number; centres: number }>(
+      db,
+      sql`select (select count(*) from athletes)::int as athletes, (select count(*) from academies)::int as centres`,
+    ),
+    db
+      .select({ fileName: importBatches.fileName, fileSha256: importBatches.fileSha256, finishedAt: importBatches.finishedAt })
+      .from(importBatches)
+      .where(and(eq(importBatches.mode, "apply"), eq(importBatches.status, "completed")))
+      .orderBy(desc(importBatches.finishedAt))
+      .limit(1),
+  ]);
+  const l = last[0];
+  return {
+    athletes: num(counts?.athletes),
+    centres: num(counts?.centres),
+    source: l?.finishedAt ? { fileName: l.fileName, fileSha256: l.fileSha256, loadedAt: new Date(l.finishedAt).toISOString() } : null,
+  };
 }
